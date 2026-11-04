@@ -1,0 +1,131 @@
+# FerriScan — Testing Strategy
+
+Practical companion to `docs/SPEC.md` §17. This is how we actually test, with commands.
+
+## Commands
+
+```bash
+# Rust
+cargo test --workspace                       # unit + integration
+cargo test -p ferriscan-core --features test-fs
+cargo clippy --workspace --all-targets -- -D warnings
+cargo fmt --check
+cargo deny check
+cargo nextest run --workspace                # local, faster
+
+# Benchmarks
+cargo bench -p ferriscan-core
+cargo xtask budget                           # compare against bench/budgets.toml
+
+# Frontend
+npm --prefix apps/desktop run check          # svelte-check + tsc
+npm --prefix apps/desktop run lint
+npm --prefix apps/desktop run test           # vitest
+npm --prefix apps/desktop run test:e2e       # playwright (needs a built app)
+
+# Cross-cutting
+cargo xtask i18n-check
+cargo xtask contract
+cargo xtask fixtures --size 1m
+```
+
+## Layers and what belongs where
+
+### 1. Unit tests (in-module `#[cfg(test)]`)
+
+Only pure logic: node store invariants, squarify math, filters, formatting, settings migration,
+plan validation with a fake filesystem. No temp dirs, no OS calls.
+
+### 2. Property tests (`proptest`)
+
+Generators produce random trees (breadth, depth, sizes, name alphabets including CJK and
+emoji). Assert invariants I1–I5 from `FILE_ARCHITECTURE.md` §3 after construction, finalize,
+patch, and serialization round-trips.
+
+### 3. Golden tests (`insta`)
+
+- DTO JSON for every command (`tests/contract/snapshots/*.json`).
+- Layout rectangles for a fixed tree.
+- CLI table output.
+- CSV export of a fixed fixture.
+
+Review a snapshot diff explicitly; never `INSTA_UPDATE=always` in CI.
+
+### 4. FakeFs integration
+
+`ferriscan_core::fs::FakeFs` implements `DirReader`/`MetadataSource` over an enum of nodes.
+Builders: `synthetic(entries)`, `wide(n)`, `deep(n)`, `unicode()`, `with_errors()`,
+`hardlinks()`, `symlink_loop()`. Scans through FakeFs must be deterministic and used for every
+engine test that does not need real I/O.
+
+### 5. Platform integration (real FS, `tempfile`)
+
+- Directory enumeration matches `std::fs` on the same tree.
+- Long paths on Windows (create via `\\?\`).
+- Non-UTF-8 names (Linux: raw bytes; macOS: invalid UTF-8 normalization).
+- Permission denied (Unix `chmod 000`, Windows ACL deny).
+- Vanishing file during scan (delete from another thread mid-scan).
+- Cross-volume detection using a second temp volume when available; skip otherwise.
+
+### 6. Action safety suite (`crates/ferriscan-actions/tests`)
+
+Table-driven, each case creates its own sandbox:
+
+| Case | Expectation |
+| --- | --- |
+| Move into existing file | conflict reported, no mutation before confirmation |
+| Move across volumes | copy verified, source deleted only after verify |
+| Move where destination runs out of space | source intact, temp removed, `E_NOSPC` |
+| Delete to trash on share without trash | plan offers permanent delete explicitly |
+| Permanent delete directory tree with symlink inside | symlink unlinked, target untouched |
+| Rename case-only on Windows/macOS | succeeds via two-step rename |
+| TOCTOU: file replaced between plan and execute | `E_CHANGED`, no mutation |
+| Protected path | plan blocked with clear reason |
+| Undo move | files back, original mtimes preserved |
+| Undo after user modified destination | refused with explanation |
+
+### 7. Frontend unit/component (`vitest` + `@testing-library/svelte`)
+
+Stores (scan state machine, selection math, filters), `formatBytes` across locales, keyboard
+reducer, virtualizer windowing math. Components render with a fake IPC client.
+
+### 8. E2E (`playwright` + `tauri-driver`)
+
+Twelve critical journeys:
+
+1. Launch → volumes listed → scan a fixture dir → overview appears.
+2. Cancel mid-scan → partial snapshot usable.
+3. Tree expand/sort/filter/search.
+4. Treemap zoom → table selection sync.
+5. Delete to trash → confirm → item gone → results updated.
+6. Move with conflict → resolve → undo.
+7. Settings: change theme and language → persists after relaunch.
+8. Export CSV → file exists with expected header.
+9. Keyboard-only full pass.
+10. Permission-denied directory → Issues panel.
+11. Reload webview mid-scan → state recovered (`get_scan_state`).
+12. Unplug/remove volume mid-scan (skipped on CI, manual checklist).
+
+### 9. Accessibility
+
+- `axe-core` injected on every E2E page; fail on `serious`/`critical`.
+- Manual: NVDA (Windows), VoiceOver (macOS), Orca (Linux) script in `docs/a11y-checklist.md`.
+- Contrast verified from computed styles in a Playwright assertion for every token pair.
+
+### 10. Performance
+
+Criterion benches with fixed seeds. CI compares medians; thresholds in `bench/budgets.toml`.
+Nightly runs on a dedicated runner; PR runs a smoke subset behind the `perf` label.
+
+Reference hardware for budget statements: 8-core x86_64, 16 GB RAM, NVMe SSD, warm cache.
+
+## Test data policy
+
+- Committed fixtures are tiny (< 200 KB total) and contain no personal data.
+- Large fixtures are generated by `xtask fixtures` into `fixtures/generated/` (gitignored).
+- Never commit a real user's directory listing; use synthetic names (`proj-0001`, `file-0007.bin`).
+
+## Flakiness policy
+
+A test that fails intermittently twice is quarantined with an issue link and a `#[ignore]`/`fixme`
+tag; it must be fixed or deleted within one milestone. CI retries E2E once, never unit tests.
