@@ -1,0 +1,90 @@
+name: release
+
+on:
+  push:
+    tags: ["v*"]
+  workflow_dispatch:
+    inputs:
+      tag:
+        description: Existing tag to build (e.g. v1.0.0)
+        required: true
+
+permissions:
+  contents: write
+
+jobs:
+  build:
+    name: build ${{ matrix.target }}
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - os: windows-2022
+            target: x86_64-pc-windows-msvc
+          - os: windows-2022
+            target: aarch64-pc-windows-msvc
+          - os: ubuntu-24.04
+            target: x86_64-unknown-linux-gnu
+          - os: macos-14
+            target: aarch64-apple-darwin
+          - os: macos-14
+            target: x86_64-apple-darwin
+    runs-on: ${{ matrix.os }}
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ inputs.tag || github.ref }}
+      - uses: dtolnay/rust-toolchain@stable
+        with:
+          targets: ${{ matrix.target }}
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+      - name: Linux deps
+        if: runner.os == 'Linux'
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y libwebkit2gtk-4.1-dev libgtk-3-dev librsvg2-dev libssl-dev patchelf
+      - run: npm --prefix apps/desktop ci
+      - name: Build + bundle
+        run: npm --prefix apps/desktop run tauri build -- --target ${{ matrix.target }}
+        env:
+          TAURI_SIGNING_PRIVATE_KEY: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY }}
+          TAURI_SIGNING_PRIVATE_KEY_PASSWORD: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY_PASSWORD }}
+          APPLE_CERTIFICATE: ${{ secrets.APPLE_CERTIFICATE }}
+          APPLE_CERTIFICATE_PASSWORD: ${{ secrets.APPLE_CERTIFICATE_PASSWORD }}
+          APPLE_SIGNING_IDENTITY: ${{ secrets.APPLE_SIGNING_IDENTITY }}
+          APPLE_ID: ${{ secrets.APPLE_ID }}
+          APPLE_PASSWORD: ${{ secrets.APPLE_PASSWORD }}
+          APPLE_TEAM_ID: ${{ secrets.APPLE_TEAM_ID }}
+      - name: Checksums
+        shell: bash
+        run: |
+          mkdir -p dist
+          find apps/desktop/src-tauri/target -path '*bundle*' -type f \
+            \( -name '*.exe' -o -name '*.msi' -o -name '*.AppImage' -o -name '*.deb' \
+               -o -name '*.rpm' -o -name '*.dmg' \) -exec cp {} dist/ \;
+          cd dist && sha256sum * > SHA256SUMS.txt || true
+      - uses: actions/upload-artifact@v4
+        with:
+          name: ferriscan-${{ matrix.target }}
+          path: dist/*
+
+  publish:
+    name: publish GitHub release
+    needs: build
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/download-artifact@v4
+        with:
+          path: artifacts
+      - name: Extract release notes from CHANGELOG
+        run: |
+          awk '/^## \[/{c++} c==1' CHANGELOG.md > RELEASE_NOTES.md || true
+      - uses: softprops/action-gh-release@v2
+        with:
+          tag_name: ${{ inputs.tag || github.ref_name }}
+          body_path: RELEASE_NOTES.md
+          files: artifacts/**/*
+          draft: true

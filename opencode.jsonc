@@ -1,0 +1,64 @@
+{
+  "$schema": "https://opencode.ai/config.json",
+  "default_agent": "orchestrator",
+  "instructions": ["AGENTS.md", "docs/SPEC.md"],
+  "permissions": [
+    { "action": "edit", "resource": "*", "effect": "allow" },
+    { "action": "shell", "resource": "git push *", "effect": "ask" },
+    { "action": "shell", "resource": "gh release *", "effect": "ask" },
+    { "action": "shell", "resource": "cargo publish *", "effect": "deny" }
+  ],
+  "watcher": {
+    "ignore": [
+      "target/**",
+      "**/target/**",
+      "node_modules/**",
+      "apps/desktop/dist/**",
+      "apps/desktop/src-tauri/gen/**",
+      "fixtures/generated/**",
+      "bench/out/**",
+      "**/*.scan.json"
+    ]
+  },
+  "experimental": {
+    "todo": true,
+    "subagent_depth": 1
+  },
+  "commands": {
+    "milestone": {
+      "description": "Plan and execute the next roadmap milestone",
+      "agent": "orchestrator",
+      "template": "Read docs/ROADMAP.md and AGENTS.md. Take milestone $ARGUMENTS, list its tasks with the owning agent, then execute them in dependency order. Keep the workspace compiling and tests green at each step. Report progress per task and stop on any spec conflict."
+    },
+    "task": {
+      "description": "Implement one roadmap task end to end",
+      "agent": "orchestrator",
+      "template": "Implement roadmap task $1 (see docs/ROADMAP.md). Follow AGENTS.md: read the cited SPEC sections and FILE_ARCHITECTURE areas, plan the change, implement with tests, run verification commands, then report files touched, commands and results, and anything left."
+    },
+    "review": {
+      "description": "Review the current changes against spec and budgets",
+      "agent": "security-reviewer",
+      "template": "Review the current working tree changes with the security-reviewer checklist plus correctness, spec alignment (docs/SPEC.md), performance budgets, i18n completeness and test coverage. Report findings by severity with file:line references. Do not edit files."
+    },
+    "contract": {
+      "description": "Regenerate and verify the IPC contract",
+      "agent": "test-engineer",
+      "template": "Run cargo xtask contract, inspect the diff in the generated TypeScript types and JSON schema snapshots, and either update the frontend mirrors or fix the Rust DTOs so they match the spec. Report breaking changes."
+    },
+    "perf": {
+      "description": "Benchmark the touched hot paths against budgets",
+      "agent": "perf-engineer",
+      "template": "Run the relevant benchmarks for $ARGUMENTS, compare against bench/budgets.toml with cargo xtask budget, and report regressions with a profiling hypothesis. Propose a fix only if a budget is exceeded."
+    },
+    "i18n": {
+      "description": "Audit and complete localization",
+      "agent": "i18n-engineer",
+      "template": "Run cargo xtask i18n-check, list missing or stale keys for $ARGUMENTS (default: all shipped locales), add English keys, and update the other locales where you can do so accurately. Flag strings that need native review."
+    },
+    "release": {
+      "description": "Prepare a release build and notes",
+      "agent": "release-engineer",
+      "template": "Prepare release $ARGUMENTS: verify versioning, changelog, signed-build readiness, packaging config, and run the release checklist. Do not publish or push without explicit approval."
+    }
+  }
+}

@@ -1,0 +1,20 @@
+* text=auto eol=lf
+
+*.rs    text diff=rust
+*.toml  text
+*.md    text
+*.json  text
+*.jsonc text
+*.yml   text
+*.yaml  text
+*.ftl   text
+
+*.ico   binary
+*.png   binary
+*.icns  binary
+*.exe   binary
+*.dll   binary
+*.node  binary
+
+Cargo.lock          text eol=lf
+package-lock.json   text eol=lf
