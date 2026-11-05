@@ -1,0 +1,30 @@
+[package]
+name = "ferriscan-app"
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+description = "FerriScan desktop shell"
+
+[lib]
+name = "ferriscan_app"
+crate-type = ["staticlib", "cdylib", "rlib"]
+
+[build-dependencies]
+tauri-build = { version = "2.7.4", features = [] }
+
+[dependencies]
+ferriscan-core = { workspace = true }
+ferriscan-platform = { workspace = true }
+ferriscan-persist = { workspace = true }
+ferriscan-i18n = { workspace = true }
+serde = { workspace = true }
+serde_json = { workspace = true }
+tracing = { workspace = true }
+tracing-subscriber = { workspace = true }
+tauri = { version = "2.12.5", features = [] }
+tauri-plugin-dialog = "2.8.4"
+tauri-plugin-opener = "2.7.2"
+
+[lints]
+workspace = true
