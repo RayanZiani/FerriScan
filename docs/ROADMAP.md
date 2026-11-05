@@ -8,6 +8,27 @@ be green before the next milestone starts. Task IDs are stable and referenced by
 
 ---
 
+## Implementation status (as of the first build)
+
+Verified on Windows 11 with `cargo test --workspace` (72 tests), `clippy -D warnings`,
+`cargo fmt --check`, `svelte-check` (0 errors), `vite build` and `vitest` (24 tests).
+
+| Milestone | State | Notes |
+| --- | --- | --- |
+| M0 Foundation | **done** | workspace, CI workflows, toolchain, agents, icon |
+| M1 Volumes | **mostly done** | Windows verified; Linux/macOS code written, not yet run in CI |
+| M2 Scanner core | **core done** | store, controller, workers, errors, progress, aggregation, CLI; platform fast paths and benchmarks pending |
+| M3 Query + table | **mostly done** | children paging, breadcrumbs, tree table, progress UI; search/filter IPC and virtualization pending |
+| M4 Visualizations | **started** | treemap and overview done; sunburst renderer, extensions, largest files pending |
+| M5 Actions | **started** | plan validation, protected paths, same-volume move; copy/trash/delete/journal pending |
+| M6 Settings/theme/i18n | **started** | persisted settings with migration, tokens, light/dark/high-contrast, English strings |
+| M7–M12 | **not started** | performance hardening, a11y audit, packaging, beta, 1.0 |
+
+Measured on a warm NVMe in a debug build: 13.6k entries in 335 ms (~40k entries/s). Release
+budgets are still to be validated by T2.10.
+
+---
+
 ## M0 — Foundation (week 1)
 
 Owner: Core. Goal: a repository that builds, lints, tests and runs an empty window on all three
