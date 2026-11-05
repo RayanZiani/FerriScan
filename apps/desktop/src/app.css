@@ -1,0 +1,225 @@
+/* ---------------------------------------------------------------------------
+   FerriScan design tokens and base styles.
+
+   Rules: components never hard-code colors or spacing. Everything resolves
+   through these variables so light, dark and high-contrast themes stay in sync.
+   --------------------------------------------------------------------------- */
+
+:root {
+  color-scheme: light dark;
+
+  /* Surfaces */
+  --fs-bg: #f6f7f9;
+  --fs-surface: #ffffff;
+  --fs-surface-2: #eef0f4;
+  --fs-surface-3: #e4e7ec;
+  --fs-border: #d7dbe2;
+  --fs-border-strong: #b9bfc9;
+
+  /* Text */
+  --fs-text: #14171c;
+  --fs-text-muted: #5b6472;
+  --fs-text-faint: #8a93a1;
+  --fs-text-inverse: #ffffff;
+
+  /* Semantic */
+  --fs-accent: #2563eb;
+  --fs-accent-hover: #1d4ed8;
+  --fs-accent-soft: #dbe4ff;
+  --fs-danger: #d92d20;
+  --fs-danger-soft: #fee4e2;
+  --fs-warning: #b54708;
+  --fs-success: #067647;
+  --fs-focus: #2563eb;
+
+  /* Chart palette: 12 hues, color-blind aware ordering */
+  --fs-chart-1: #2563eb;
+  --fs-chart-2: #7c3aed;
+  --fs-chart-3: #db2777;
+  --fs-chart-4: #ea580c;
+  --fs-chart-5: #ca8a04;
+  --fs-chart-6: #16a34a;
+  --fs-chart-7: #0891b2;
+  --fs-chart-8: #4f46e5;
+  --fs-chart-9: #be123c;
+  --fs-chart-10: #65a30d;
+  --fs-chart-11: #0d9488;
+  --fs-chart-12: #9333ea;
+  --fs-chart-other: #9aa3af;
+
+  /* Geometry */
+  --fs-radius-sm: 4px;
+  --fs-radius: 8px;
+  --fs-radius-lg: 12px;
+  --fs-space-1: 4px;
+  --fs-space-2: 8px;
+  --fs-space-3: 12px;
+  --fs-space-4: 16px;
+  --fs-space-5: 24px;
+  --fs-space-6: 32px;
+  --fs-row-height: 30px;
+  --fs-row-height-compact: 24px;
+
+  /* Type */
+  --fs-font-sans: 'Segoe UI Variable Text', 'Segoe UI', system-ui, -apple-system,
+    'Helvetica Neue', Arial, sans-serif;
+  --fs-font-mono: 'Cascadia Mono', 'SF Mono', ui-monospace, 'Consolas', monospace;
+  --fs-text-xs: 11px;
+  --fs-text-sm: 12px;
+  --fs-text-md: 13px;
+  --fs-text-lg: 15px;
+  --fs-text-xl: 20px;
+
+  /* Motion */
+  --fs-duration-fast: 90ms;
+  --fs-duration: 140ms;
+  --fs-ease: cubic-bezier(0.2, 0, 0.2, 1);
+
+  --fs-shadow-1: 0 1px 2px rgb(16 24 40 / 6%);
+  --fs-shadow-2: 0 4px 12px rgb(16 24 40 / 10%);
+  --fs-shadow-3: 0 12px 32px rgb(16 24 40 / 16%);
+}
+
+:root[data-theme='dark'] {
+  --fs-bg: #0f1115;
+  --fs-surface: #151922;
+  --fs-surface-2: #1b202b;
+  --fs-surface-3: #232936;
+  --fs-border: #2a3140;
+  --fs-border-strong: #3a4354;
+
+  --fs-text: #e8ebf0;
+  --fs-text-muted: #9aa4b4;
+  --fs-text-faint: #6b7484;
+  --fs-text-inverse: #0f1115;
+
+  --fs-accent: #5b8cff;
+  --fs-accent-hover: #7aa2ff;
+  --fs-accent-soft: #1c2740;
+  --fs-danger: #ff6b5e;
+  --fs-danger-soft: #3a1d1b;
+  --fs-warning: #f5a524;
+  --fs-success: #3ddc97;
+  --fs-focus: #7aa2ff;
+
+  --fs-chart-1: #5b8cff;
+  --fs-chart-2: #a78bfa;
+  --fs-chart-3: #f472b6;
+  --fs-chart-4: #fb923c;
+  --fs-chart-5: #facc15;
+  --fs-chart-6: #4ade80;
+  --fs-chart-7: #22d3ee;
+  --fs-chart-8: #818cf8;
+  --fs-chart-9: #fb7185;
+  --fs-chart-10: #a3e635;
+  --fs-chart-11: #2dd4bf;
+  --fs-chart-12: #c084fc;
+  --fs-chart-other: #4b5563;
+
+  --fs-shadow-1: 0 1px 2px rgb(0 0 0 / 40%);
+  --fs-shadow-2: 0 4px 12px rgb(0 0 0 / 50%);
+  --fs-shadow-3: 0 12px 32px rgb(0 0 0 / 60%);
+}
+
+/* High contrast: opaque borders, no subtle fills, no color-only encoding. */
+:root[data-contrast='high'] {
+  --fs-border: currentColor;
+  --fs-border-strong: currentColor;
+  --fs-surface-2: transparent;
+  --fs-surface-3: transparent;
+  --fs-shadow-1: none;
+  --fs-shadow-2: none;
+  --fs-shadow-3: none;
+}
+
+*,
+*::before,
+*::after {
+  box-sizing: border-box;
+}
+
+html,
+body {
+  height: 100%;
+  margin: 0;
+  overflow: hidden;
+}
+
+body {
+  font-family: var(--fs-font-sans);
+  font-size: var(--fs-text-md);
+  line-height: 1.45;
+  color: var(--fs-text);
+  background: var(--fs-bg);
+  -webkit-font-smoothing: antialiased;
+}
+
+#app {
+  height: 100%;
+}
+
+button,
+input,
+select {
+  font: inherit;
+  color: inherit;
+}
+
+:focus-visible {
+  outline: 2px solid var(--fs-focus);
+  outline-offset: 2px;
+  border-radius: var(--fs-radius-sm);
+}
+
+::selection {
+  background: var(--fs-accent-soft);
+  color: var(--fs-text);
+}
+
+/* Scrollbars follow the theme without hiding the native behavior. */
+* {
+  scrollbar-width: thin;
+  scrollbar-color: var(--fs-border-strong) transparent;
+}
+
+*::-webkit-scrollbar {
+  width: 10px;
+  height: 10px;
+}
+
+*::-webkit-scrollbar-thumb {
+  background: var(--fs-border-strong);
+  border-radius: 999px;
+  border: 2px solid transparent;
+  background-clip: content-box;
+}
+
+*::-webkit-scrollbar-track {
+  background: transparent;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  :root {
+    --fs-duration-fast: 0ms;
+    --fs-duration: 0ms;
+  }
+
+  *,
+  *::before,
+  *::after {
+    animation-duration: 0.001ms !important;
+    transition-duration: 0.001ms !important;
+  }
+}
+
+.visually-hidden {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  padding: 0;
+  margin: -1px;
+  overflow: hidden;
+  clip: rect(0, 0, 0, 0);
+  white-space: nowrap;
+  border: 0;
+}
