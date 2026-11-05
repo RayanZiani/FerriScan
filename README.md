@@ -6,9 +6,9 @@ FerriScan shows what is actually eating your drives: an instant overview of ever
 a zoomable treemap, sunburst and sorted tables, extension breakdowns, and the largest files —
 all rendered from a Rust scanning engine built for tens of millions of entries.
 
-> **Status: pre-alpha.** The repository currently contains the specification, the architecture,
-> the roadmap and the engineering agent setup. Code is being built milestone by milestone
-> (see [`docs/ROADMAP.md`](docs/ROADMAP.md)).
+> **Status: early alpha.** The engine, the shell and the first views are in place and tested
+> (see [`docs/ROADMAP.md`](docs/ROADMAP.md)). File operations, sunburst, the extension view and
+> settings UI are the next milestones.
 
 ## Why FerriScan
 
@@ -22,24 +22,24 @@ all rendered from a Rust scanning engine built for tens of millions of entries.
   system locale, and adapts to Linux and macOS conventions.
 - **Open.** MIT licensed, readable architecture, no hidden services.
 
-## What it does (target v1.0)
+## What works today
 
-| Area | Capability |
+| Area | State |
 | --- | --- |
-| Volumes | List drives, capacity, free space, filesystem, removable/local/network |
-| Scan | Full-volume or single-folder scan, cancellable, non-blocking, progress |
-| Views | Tree table (sortable/filterable), treemap, sunburst, extension bars, largest files |
-| Search | Instant name search inside the current snapshot |
-| Actions | Open, reveal in file manager, move, copy, rename, delete to trash, permanent delete |
-| Safety | Pre-flight plans, conflict detection, cross-volume handling, undo for moves |
-| Privacy | Local-only settings, opt-in local cache, zero telemetry |
-| Languages | English, French, German, Spanish, Italian, Portuguese (BR), Dutch, Polish, Russian, Turkish, Japanese, Simplified Chinese |
-| Themes | System / light / dark, Windows accent color, high contrast, reduced motion |
+| Volume list with capacity, free space, filesystem and hot refresh | working |
+| Parallel scan of a volume or folder, live progress, cancellation | working |
+| Tree table with sort, breadcrumb navigation, keyboard rows | working |
+| Treemap (canvas, squarified, zoom into folders) | working |
+| Search, filters, extensions and sunburst | engine ready, UI pending |
+| Move / copy / trash / permanent delete | planning + same-volume move; rest pending |
+| Settings persistence with migration and unknown-key preservation | working |
+| Light / dark / high-contrast themes, 12 locales | tokens and English; translations pending |
 
-## Quick start (development)
+## Quick start
 
-Prerequisites: Rust (stable 1.90+, pinned by `rust-toolchain.toml`), Node.js 22+, and the platform WebView dependencies
-(WebView2 on Windows, `libwebkit2gtk-4.1` on Linux, Xcode CLT on macOS).
+Prerequisites: Rust (stable 1.90, pinned by `rust-toolchain.toml`), Node.js 22+, and the
+platform WebView dependencies (WebView2 on Windows, `libwebkit2gtk-4.1` on Linux, Xcode CLT on
+macOS).
 
 ```bash
 git clone https://github.com/<org>/ferriscan.git
@@ -48,10 +48,21 @@ npm --prefix apps/desktop install
 npm --prefix apps/desktop run tauri dev
 ```
 
-Headless scan of a folder (works before the UI exists):
+Headless scan of a folder:
 
 ```bash
 cargo run -p ferriscan-cli -- scan . --top 20
+cargo run -p ferriscan-cli -- volumes
+```
+
+## Verify
+
+```bash
+cargo fmt --all --check
+cargo clippy --workspace --all-targets -- -D warnings
+cargo test --workspace
+npm --prefix apps/desktop run check
+npm --prefix apps/desktop run test
 ```
 
 ## Documentation
@@ -65,4 +76,4 @@ cargo run -p ferriscan-cli -- scan . --top 20
 
 ## License
 
-MIT. See [`LICENSE`](LICENSE) (added in milestone M0).
+MIT. See [`LICENSE`](LICENSE).

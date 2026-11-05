@@ -15,28 +15,42 @@
   import { settings } from '$lib/state/settings.svelte';
 
   let ready = $state(false);
+  let bootError = $state<string | null>(null);
 
   onMount(() => {
     let dispose: (() => void) | undefined;
+    const unwatch = settings.watchOs();
+
+    // Each step is independent: a failed event subscription must not stop the
+    // volume list from loading, and vice versa. The shell always becomes usable.
     void (async () => {
-      await settings.load();
-      dispose = await session.subscribe();
+      const results = await Promise.allSettled([
+        settings.load(),
+        session.subscribe().then((fn) => {
+          dispose = fn;
+        }),
+      ]);
+      const failed = results.find((result) => result.status === 'rejected');
+      if (failed?.status === 'rejected') {
+        bootError = String(failed.reason);
+      }
       await session.loadVolumes();
       ready = true;
     })();
-    const unwatch = settings.watchOs();
+
     return () => {
       dispose?.();
       unwatch();
     };
   });
 
-  // Once a snapshot arrives, jump to its root.
+  // Jump to the snapshot root once per new snapshot, never on later navigation.
+  let seededFor = $state<string | null>(null);
   $effect(() => {
     const meta = session.meta;
-    if (meta && navigation.current?.id !== meta.rootNodeId) {
-      void navigation.reset(meta.rootNodeId);
-    }
+    if (!meta || seededFor === meta.id) return;
+    seededFor = meta.id;
+    void navigation.reset(meta.rootNodeId);
   });
 </script>
 
@@ -53,6 +67,9 @@
     <VolumeList />
 
     <main class="content">
+      {#if bootError}
+        <p class="boot-error" role="status">{bootError}</p>
+      {/if}
       {#if !ready}
         <p class="loading">{t('common.loading')}</p>
       {:else if !session.meta}
@@ -143,6 +160,16 @@
   .loading {
     margin: auto;
     color: var(--fs-text-muted);
+    font-size: var(--fs-text-sm);
+  }
+
+  .boot-error {
+    margin: var(--fs-space-2) var(--fs-space-4) 0;
+    padding: var(--fs-space-2) var(--fs-space-3);
+    border: 1px solid var(--fs-danger);
+    border-radius: var(--fs-radius);
+    background: var(--fs-danger-soft);
+    color: var(--fs-danger);
     font-size: var(--fs-text-sm);
   }
 </style>
