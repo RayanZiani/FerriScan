@@ -1,0 +1,18 @@
+[package]
+name = "ferriscan-cli"
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+description = "Headless scanner for development and CI"
+
+[[bin]]
+name = "ferriscan"
+path = "src/main.rs"
+
+[dependencies]
+ferriscan-core = { workspace = true, features = ["test-fs"] }
+ferriscan-platform = { workspace = true }
+
+[lints]
+workspace = true

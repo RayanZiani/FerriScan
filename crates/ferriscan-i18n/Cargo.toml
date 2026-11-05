@@ -1,0 +1,13 @@
+[package]
+name = "ferriscan-i18n"
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+description = "Locale detection and stable error-code catalogue for FerriScan"
+
+[dependencies]
+ferriscan-core = { workspace = true }
+
+[lints]
+workspace = true
