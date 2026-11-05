@@ -1,0 +1,57 @@
+# cargo-deny policy — FerriScan
+# Enforced in CI: `cargo deny check`
+
+[graph]
+targets = [
+  { triple = "x86_64-pc-windows-msvc" },
+  { triple = "aarch64-pc-windows-msvc" },
+  { triple = "x86_64-unknown-linux-gnu" },
+  { triple = "aarch64-unknown-linux-gnu" },
+  { triple = "x86_64-apple-darwin" },
+  { triple = "aarch64-apple-darwin" },
+]
+
+[advisories]
+version = 2
+yanked = "deny"
+ignore = []
+
+[licenses]
+version = 2
+confidence-threshold = 0.93
+allow = [
+  "MIT",
+  "MIT-0",
+  "Apache-2.0",
+  "Apache-2.0 WITH LLVM-exception",
+  "BSD-2-Clause",
+  "BSD-3-Clause",
+  "ISC",
+  "Unicode-3.0",
+  "Unicode-DFS-2016",
+  "Zlib",
+  "CC0-1.0",
+  "MPL-2.0",
+  "OpenSSL",
+]
+# Copyleft licenses are rejected: FerriScan is MIT and must stay redistributable
+# under permissive terms on every platform.
+
+[bans]
+multiple-versions = "warn"
+wildcards = "deny"
+highlight = "all"
+deny = [
+  # No network stack in v1.0 (ADR-0004). Dev-dependencies are exempt by policy review,
+  # not by configuration: adding any of these to a non-dev dependency fails review.
+  { name = "reqwest" },
+  { name = "hyper" },
+  { name = "ureq" },
+  # Shell execution helpers: all external programs use explicit argv.
+  { name = "shell-escape" },
+]
+
+[sources]
+unknown-registry = "deny"
+unknown-git = "deny"
+allow-registry = ["https://github.com/rust-lang/crates.io-index"]
