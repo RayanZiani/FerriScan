@@ -1,0 +1,17 @@
+[package]
+name = "ferriscan-actions"
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+description = "Safe plan/execute/undo for destructive file operations"
+
+[dependencies]
+ferriscan-core = { workspace = true }
+ferriscan-platform = { workspace = true }
+serde = { workspace = true }
+thiserror = { workspace = true }
+tracing = { workspace = true }
+
+[lints]
+workspace = true

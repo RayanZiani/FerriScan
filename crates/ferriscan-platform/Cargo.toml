@@ -1,0 +1,25 @@
+[package]
+name = "ferriscan-platform"
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+description = "Operating-system integration for FerriScan"
+
+[dependencies]
+ferriscan-core = { workspace = true }
+thiserror = { workspace = true }
+tracing = { workspace = true }
+
+[target.'cfg(windows)'.dependencies]
+windows-sys = { version = "0.61.2", features = [
+  "Win32_Foundation",
+  "Win32_Storage_FileSystem",
+  "Win32_System_WindowsProgramming",
+] }
+
+[target.'cfg(unix)'.dependencies]
+libc = "0.2.191"
+
+[lints]
+workspace = true
