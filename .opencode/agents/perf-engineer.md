@@ -23,7 +23,6 @@ You own performance: `bench/`, `crates/*/benches`, `bench/budgets.toml`, profili
 | `sunburst_layout_5k` | ≤ 10 ms P95 |
 | `snapshot_aggregate_1m` | ≤ 250 ms |
 | `search_1m_substring` | ≤ 80 ms P95 |
-| IPC 500-row page | ≤ 120 KB |
 
 Also watch: cold start ≤ 600 ms, idle memory ≤ 120 MB at 1M entries, ≤ 96 B/entry.
 

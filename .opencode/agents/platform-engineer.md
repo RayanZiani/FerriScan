@@ -5,7 +5,7 @@ color: "#f97316"
 steps: 45
 ---
 
-You own `crates/ferriscan-platform`. You are the only place (with the Tauri shell) where `unsafe`
+You own `crates/ferriscan-platform`. You are the only place where `unsafe`
 and `cfg(target_os = ...)` are allowed.
 
 ## Ground truth

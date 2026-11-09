@@ -17,15 +17,12 @@ cargo nextest run --workspace                # local, faster
 cargo bench -p ferriscan-core
 cargo xtask budget                           # compare against bench/budgets.toml
 
-# Frontend
-npm --prefix apps/desktop run check          # svelte-check + tsc
-npm --prefix apps/desktop run lint
-npm --prefix apps/desktop run test           # vitest
-npm --prefix apps/desktop run test:e2e       # playwright (needs a built app)
+# App
+cargo test -p ferriscan-app                 # view logic: layout cache, hit-testing, navigation
+cargo run -p ferriscan-app                  # manual smoke; scripts/screenshot.ps1 captures the window
 
 # Cross-cutting
 cargo xtask i18n-check
-cargo xtask contract
 cargo xtask fixtures --size 1m
 ```
 
@@ -84,12 +81,13 @@ Table-driven, each case creates its own sandbox:
 | Undo move | files back, original mtimes preserved |
 | Undo after user modified destination | refused with explanation |
 
-### 7. Frontend unit/component (`vitest` + `@testing-library/svelte`)
+### 7. UI logic (`#[cfg(test)]` in `ferriscan-app`)
 
-Stores (scan state machine, selection math, filters), `formatBytes` across locales, keyboard
-reducer, virtualizer windowing math. Components render with a fake IPC client.
+Pure view logic: results navigation and ordering, treemap layout cache and hit-testing, theme
+resolution, byte formatting. GPUI `TestAppContext` tests for entity behavior are the next step;
+today click paths are verified by launching the app, not by automation.
 
-### 8. E2E (`playwright` + `tauri-driver`)
+### 8. End-to-end journeys (manual until a GPUI driver exists)
 
 Twelve critical journeys:
 
@@ -103,7 +101,7 @@ Twelve critical journeys:
 8. Export CSV → file exists with expected header.
 9. Keyboard-only full pass.
 10. Permission-denied directory → Issues panel.
-11. Reload webview mid-scan → state recovered (`get_scan_state`).
+11. Start a second scan while one runs → ignored, first continues.
 12. Unplug/remove volume mid-scan (skipped on CI, manual checklist).
 
 ### 9. Accessibility

@@ -11,7 +11,7 @@ Fill the "Verified" column with the build SHA during M9 and remove `T` markers.
 | --- | --- | --- | --- | --- |
 | Windows | 10 1809+ | x64 | W (primary) | T |
 | Windows | 11 | x64, arm64 | W | T |
-| Windows | Server 2019/2022 | x64 | P (no Store, WebView2 bootstrapper) | T |
+| Windows | Server 2019/2022 | x64 | P (GPU/driver support to verify) | T |
 | Linux | Ubuntu 22.04/24.04 | x64, arm64 | W | T |
 | Linux | Fedora 40+ | x64 | W | T |
 | Linux | Arch | x64 | W | T |
@@ -62,6 +62,4 @@ Fill the "Verified" column with the build SHA during M9 and remove `T` markers.
 | test-linux | `ubuntu-24.04` |
 | test-windows | `windows-2022` |
 | test-macos | `macos-14` (arm64) |
-| e2e-windows | `windows-2022` + `tauri-driver` + msedgedriver |
-| e2e-linux | `ubuntu-22.04` + xvfb |
 | bench-nightly | `ubuntu-24.04` and `windows-2022` |

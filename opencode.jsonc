@@ -12,9 +12,6 @@
     "ignore": [
       "target/**",
       "**/target/**",
-      "node_modules/**",
-      "apps/desktop/dist/**",
-      "apps/desktop/src-tauri/gen/**",
       "fixtures/generated/**",
       "bench/out/**",
       "**/*.scan.json"
@@ -39,11 +36,6 @@
       "description": "Review the current changes against spec and budgets",
       "agent": "security-reviewer",
       "template": "Review the current working tree changes with the security-reviewer checklist plus correctness, spec alignment (docs/SPEC.md), performance budgets, i18n completeness and test coverage. Report findings by severity with file:line references. Do not edit files."
-    },
-    "contract": {
-      "description": "Regenerate and verify the IPC contract",
-      "agent": "test-engineer",
-      "template": "Run cargo xtask contract, inspect the diff in the generated TypeScript types and JSON schema snapshots, and either update the frontend mirrors or fix the Rust DTOs so they match the spec. Report breaking changes."
     },
     "perf": {
       "description": "Benchmark the touched hot paths against budgets",

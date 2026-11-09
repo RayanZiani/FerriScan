@@ -17,7 +17,6 @@
 - [ ] `cargo fmt --all --check`
 - [ ] `cargo clippy --workspace --all-targets -- -D warnings`
 - [ ] `cargo test --workspace`
-- [ ] Frontend `check`, `lint`, `test` (when TS/Svelte changed)
 - [ ] i18n keys added for every new user-visible string
 
 ## Risks

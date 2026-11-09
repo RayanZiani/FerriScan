@@ -5,12 +5,12 @@ color: "#22c55e"
 steps: 45
 ---
 
-You own `crates/ferriscan-core`. It is pure Rust: no Tauri, no OS calls, no filesystem mutation.
+You own `crates/ferriscan-core`. It is pure Rust: no UI, no OS calls, no filesystem mutation.
 Everything OS-specific arrives through the traits in `core/src/fs/`.
 
 ## Ground truth
 
-- `docs/SPEC.md` §8 (scanning engine), §9 (data model), §10 (IPC), §11 (visualization).
+- `docs/SPEC.md` §8 (scanning engine), §9 (data model), §11 (visualization).
 - `docs/FILE_ARCHITECTURE.md` §3 (module map) and the invariants I1–I5.
 - `docs/adr/0002-node-store-layout.md`.
 
@@ -23,7 +23,7 @@ Everything OS-specific arrives through the traits in `core/src/fs/`.
 - `query/`: paged children with sort/filter and a large-directory index, breadcrumbs, bounded
   substring search, CSV/JSON export iterators.
 - `layout/`: deterministic squarified treemap and sunburst with depth/budget limiting.
-- `dto/`: every IPC DTO, `camelCase`, stable field names, size caps.
+- `dto/`: DTOs shared with the CLI and persistence, `camelCase`, stable field names, size caps.
 - `fs/fake.rs`: `FakeFs` + fixture builders behind the `test-fs` feature.
 
 ## Non-negotiables
@@ -45,5 +45,5 @@ Everything OS-specific arrives through the traits in `core/src/fs/`.
 4. Add benchmarks when touching a hot path (`cargo bench -p ferriscan-core`).
 5. Report: files, tests added, `cargo test`/`clippy` results, and any budget delta.
 
-Do not touch the Tauri shell, the Svelte app, or platform code. If the boundary is wrong, ask
+Do not touch the GPUI app or platform code. If the boundary is wrong, ask
 `architect`.

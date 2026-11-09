@@ -37,15 +37,14 @@ all rendered from a Rust scanning engine built for tens of millions of entries.
 
 ## Quick start
 
-Prerequisites: Rust (stable 1.98, pinned by `rust-toolchain.toml`), Node.js 22+, and the
-platform WebView dependencies (WebView2 on Windows, `libwebkit2gtk-4.1` on Linux, Xcode CLT on
-macOS).
+Prerequisites: Rust (1.98.1, pinned by `rust-toolchain.toml`) and the platform build tools
+(Visual Studio Build Tools on Windows, Xcode CLT on macOS, GPUI system libraries on Linux; see
+`CONTRIBUTING.md`). No Node.js, no webview.
 
 ```bash
 git clone https://github.com/<org>/ferriscan.git
 cd ferriscan
-npm --prefix apps/desktop install
-npm --prefix apps/desktop run tauri dev
+cargo run -p ferriscan-app
 ```
 
 Headless scan of a folder:
@@ -61,8 +60,6 @@ cargo run -p ferriscan-cli -- volumes
 cargo fmt --all --check
 cargo clippy --workspace --all-targets -- -D warnings
 cargo test --workspace
-npm --prefix apps/desktop run check
-npm --prefix apps/desktop run test
 ```
 
 ## Documentation

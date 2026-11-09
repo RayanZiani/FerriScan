@@ -19,9 +19,9 @@ Read in this order before touching code:
 | Product | FerriScan — fast, private, open-source disk space analyzer |
 | License | MIT |
 | Platforms | Windows 10 1809+ (primary), Linux, macOS 11+ |
-| Stack | Rust 2024 (pinned 1.98.1), Tauri 2.12, Svelte 5 + Vite 8 + TypeScript. **Migrating to GPUI (100 % Rust) per `docs/adr/0005-gpui-native-ui.md`**: Tauri/Svelte rules below stay in force until the spike M-G0 is accepted and the ADR status is Accepted; GPUI code lives in `apps/desktop-gpui` meanwhile. |
+| Stack | Rust 2024 (pinned 1.98.1), `GPUI` (pinned Zed revision, ADR-0005). 100 % Rust, no webview, no Node |
 | Engine | `crates/ferriscan-core` (pure), `ferriscan-platform` (OS), `ferriscan-actions` (mutations) |
-| UI | `apps/desktop/src` (Svelte), shell in `apps/desktop/src-tauri` |
+| UI | `apps/desktop` (`ferriscan-app`, GPUI) |
 | Privacy | No account, no telemetry, no network in v1.0 |
 | Docs language | English, everywhere — code, comments, commits, issues, docs |
 
@@ -34,9 +34,10 @@ Read in this order before touching code:
    `--no-default-features` on any machine. OS calls go through traits.
 3. **Only `ferriscan-actions` mutates user files.** No exceptions, including "temporary" code.
 4. **No shell.** Never `sh -c`, `cmd /c`, or interpolated commands. `Command::new(program).args([...])`.
-5. **The frontend sends node IDs, not paths.** Paths are resolved in Rust from the snapshot.
-6. **Every user-visible string is localized.** No literal text in `.svelte` files outside
-   `lib/i18n`. `xtask i18n-check` enforces it.
+5. **The UI holds node IDs, not paths.** Paths are resolved from the snapshot at the point of use.
+6. **Every user-visible string is localized.** No literal text in UI code: use
+   `ferriscan_i18n::Catalog` keys from `crates/ferriscan-i18n/locales`. `xtask i18n-check` will
+   enforce it once implemented.
 7. **Privacy is structural.** Adding `reqwest`, an analytics SDK, or any outbound call is a
    spec violation, not a review comment.
 8. **Immutability after publish.** A `Snapshot` is never mutated; patches create a new one.
@@ -53,28 +54,22 @@ cargo clippy --workspace --all-targets -- -D warnings
 cargo test --workspace
 cargo deny check
 
-# Frontend
-npm --prefix apps/desktop install
-npm --prefix apps/desktop run check
-npm --prefix apps/desktop run lint
-npm --prefix apps/desktop run test
-
 # App
-npm --prefix apps/desktop run tauri dev
-npm --prefix apps/desktop run tauri build
+cargo run -p ferriscan-app              # run the desktop app
+cargo build --release -p ferriscan-app
 
 # Cross-cutting
 cargo xtask i18n-check
-cargo xtask contract
 cargo xtask budget          # only when touching hot paths
 ```
 
-Windows note: the WebView2 runtime is required; CI uses the evergreen bootstrapper. Linux
-requires `libwebkit2gtk-4.1-dev`, `libgtk-3-dev`, `libssl-dev`, `librsvg2-dev`. macOS requires
-Xcode command-line tools.
+Windows needs the Visual Studio Build Tools (C++ workload). Linux needs the GPUI system
+libraries: `libxkbcommon-dev libxkbcommon-x11-dev libwayland-dev libxcb1-dev libx11-xcb-dev
+libfontconfig-dev libvulkan-dev`. macOS requires Xcode command-line tools. GPUI needs Rust
+1.98+, which is why the toolchain is pinned to 1.98.1.
 
 **Minimum verification before reporting a task done:** `cargo fmt --check`, `clippy -D warnings`,
-`cargo test` for the touched crates, frontend `check` if TS/Svelte changed. State explicitly
+`cargo test` for the touched crates. State explicitly
 which commands you ran and their result.
 
 ## 4. Code conventions
@@ -88,22 +83,21 @@ which commands you ran and their result.
   optional), `ErrorCode`.
 - Modules: `foo.rs` + `foo/` directory; no `mod.rs`.
 - Every public item has a doc comment explaining *why*, not restating the signature.
-- `unsafe` only in `ferriscan-platform` and the Tauri shell; each block has a `// SAFETY:`
+- `unsafe` only in `ferriscan-platform`; each block has a `// SAFETY:`
   comment naming the invariant and the caller contract.
 - No `println!` outside CLI/xtask; use `tracing`.
 - Tests live in `#[cfg(test)] mod tests` for units and `tests/` for integration.
 - Naming: `scan_dir` not `scanFolder`; `node_id` not `nodeID`.
 
-### TypeScript / Svelte
+### UI (GPUI)
 
-- `strict: true`, no `any`, no non-null assertion without a comment.
-- Svelte 5 runes only: `$state`, `$derived`, `$effect`, `$props`. No stores, no
-  `createEventDispatcher`, no `export let`.
-- Components: one concern, props typed, callbacks named `onX`.
-- All IPC through `lib/ipc/client.ts`; no `invoke` in components.
-- Styling: design tokens only. No hex colors, no px magic numbers outside `app.css`.
-- Lists over 200 rows must use the virtualizer.
-- Every async UI path has loading, empty and error states.
+- One concern per view or widget; state lives in the `Shell` entity or a small struct it owns.
+- No blocking work in `render`: OS and engine calls go through `cx.background_executor()` and
+  results come back with `this.update`.
+- Colors and spacing come from `theme.rs` tokens; no ad-hoc hex values in views.
+- Lists that can exceed 200 rows use `uniform_list`.
+- Every async UI path has loading, empty and error states (toast on failure).
+- Closures stored by GPUI are `'static`: clone `Arc`/`Rc` handles instead of borrowing the view.
 
 ### Commits
 
@@ -135,8 +129,8 @@ spans more than six areas, write an ADR first.
 
 | I need to… | Go to |
 | --- | --- |
-| Add a scan option | `core/src/scan/mod.rs`, `core/src/dto/scan.rs`, `src-tauri/src/commands/scan.rs`, UI scan panel, locales |
-| Add a view | `core/src/query` + `core/src/layout`, `dto`, command, `components/views`, `state/view.svelte.ts`, locales, E2E |
+| Add a scan option | `core/src/scan/mod.rs`, `core/src/dto/scan.rs`, `apps/desktop/src/shell.rs` (scan panel), locales |
+| Add a view | `core/src/query` + `core/src/layout`, view in `apps/desktop/src`, locales, tests |
 | Touch OS behavior | `crates/ferriscan-platform/<area>/<os>.rs` + `docs/PLATFORM_MATRIX.md` |
 | Change a destructive op | `crates/ferriscan-actions` + ADR-0003 review + safety tests |
 | Add a setting | `persist/src/settings.rs`, `dto/settings.rs`, settings panel, locale keys, migration test |
@@ -148,7 +142,7 @@ spans more than six areas, write an ADR first.
    the module you will touch. Do not start from assumptions about APIs — read the code.
 2. **Plan.** For anything larger than a single file, write a short plan (bullets) into your
    response before editing. Name the files you expect to change.
-3. **Implement in vertical slices.** Data model → engine → IPC → UI → test. Keep the workspace
+3. **Implement in vertical slices.** Data model → engine → UI → test. Keep the workspace
    compiling between slices.
 4. **Test as you go.** Add the test in the same change as the behavior. Failure paths are part
    of the behavior.
@@ -176,7 +170,6 @@ Rules of engagement:
 - [ ] Behavior matches the cited SPEC requirement IDs.
 - [ ] Unit + integration tests, including error paths.
 - [ ] `cargo fmt`, `clippy -D warnings`, `cargo test` for touched crates.
-- [ ] Frontend: `check`, `lint`, `test` when TS/Svelte changed.
 - [ ] i18n keys added in `en` and tracked for other locales.
 - [ ] Light / dark / high-contrast verified for UI changes (screenshots in PR).
 - [ ] Keyboard path and accessible name verified for UI changes.
@@ -188,7 +181,7 @@ Rules of engagement:
 
 - Never log full paths at `info`; redact to a BLAKE3 prefix unless verbose logging is on.
 - Never read file contents. Metadata only.
-- Never add a webview capability for `fs`, `shell`, or unrestricted `http`.
+- Never add a webview or an embedded browser engine; the UI is native GPUI only.
 - Validate every DTO with size caps (name ≤ 65,535 bytes, page ≤ 500 rows, search ≤ 1,000 hits).
 - Plan tokens: constant-time comparison, 5-minute expiry, process-scoped secret.
 - Any new external process invocation needs a review by `security-reviewer` and an entry in the
@@ -207,7 +200,7 @@ Snapshot, node, plan, journal, budget, allocated vs logical size: see `docs/SPEC
 | `ferriscan-core` (model, scan, query, layout, DTO) | `core-engineer` |
 | `ferriscan-platform`, OS quirks, packaging deps | `platform-engineer` |
 | `ferriscan-actions` (plan/execute/undo/safety) | `actions-engineer` |
-| Svelte UI, design tokens, charts, a11y | `ui-engineer` |
+| GPUI UI, design tokens, charts, a11y | `ui-engineer` |
 | Locales, Fluent, formatting | `i18n-engineer` |
 | Tests, CI, fixtures, E2E | `test-engineer` |
 | Benchmarks, profiling, budgets | `perf-engineer` |

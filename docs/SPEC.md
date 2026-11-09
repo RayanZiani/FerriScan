@@ -24,7 +24,7 @@ This document is the single source of truth for **what FerriScan is**, **how it 
 7. [Architecture](#7-architecture)
 8. [Scanning engine](#8-scanning-engine)
 9. [Data model](#9-data-model)
-10. [IPC contract](#10-ipc-contract)
+10. [Engine API](#10-engine-api)
 11. [Visualization](#11-visualization)
 12. [File operations and safety](#12-file-operations-and-safety)
 13. [Settings, persistence and privacy](#13-settings-persistence-and-privacy)
@@ -278,7 +278,6 @@ A scan is dominated by **metadata syscalls**, not by CPU. Therefore:
 | `sunburst_layout_5k` | ≤ 10 ms P95 |
 | `snapshot_aggregate_1m` | ≤ 250 ms |
 | `search_1m_substring` | ≤ 80 ms P95 |
-| IPC payload for a 500-row page | ≤ 120 KB |
 
 A benchmark exceeding its budget by > 15 % fails PR CI; > 5 % posts a warning. Budgets live in
 version control and may only change with a documented ADR.
@@ -291,25 +290,26 @@ version control and may only change with a documented ADR.
 
 | Layer | Technology | Rationale |
 | --- | --- | --- |
-| Shell + UI | **GPUI** (pinned git revision), 100 % Rust, no webview — *proposed by ADR-0005, Tauri 2.12 + Svelte 5 remains in force until spike M-G0 passes* | One language, direct access to `Arc<Snapshot>`, GPU rendering, no IPC. |
+| Shell + UI | **GPUI** (pinned Zed git revision), 100 % Rust, no webview (ADR-0005) | One language, direct access to `Arc<Snapshot>`, GPU rendering, no IPC. |
 | Charts | GPUI canvas renderers (treemap, sunburst) fed by `core::layout` arrays | Predictable frame budget at 5k+ nodes. |
 | Engine | Rust 2024 edition, one workspace | Direct OS APIs, zero-copy index, deterministic performance. |
-| IPC | None under ADR-0005 (direct calls). Until cutover: Tauri commands with a contract test | Removes the serialization boundary. |
+| IPC | None: the UI calls the engine crates directly | No serialization boundary to budget or secure. |
 | i18n | Fluent (`.ftl`) via `ferriscan-i18n`; stable error codes from Rust | Plural/gender correctness, no string concatenation. |
 | Storage | Plain versioned JSON in the OS config dir | Auditable, portable, no database dependency. |
 | Logging | `tracing` to a rotating local file, off by default at `info` | Diagnosable without telemetry. |
 
-See `docs/adr/0001-tauri-svelte.md` for the original alternatives (Electron, egui, iced, Qt,
-Slint) and `docs/adr/0005-gpui-native-ui.md` for the GPUI migration.
+See `docs/adr/0005-gpui-native-ui.md` for the choice of GPUI and its known risks, and
+`docs/adr/0001-tauri-svelte.md` (superseded) for the alternatives first evaluated (Electron,
+egui, iced, Qt, Slint).
 
 ### 7.2 Process and data flow
 
 ```
                  ┌──────────────────────────── Windows / Linux / macOS ───────────────────────────┐
                  │                                                                                 │
-  ┌──────────────▼──────────────┐        Tauri IPC (commands + events)        ┌──────────────────┐  │
-  │  WebView (Svelte 5)         │ ◄────────────────────────────────────────► │  Rust core       │  │
-  │  views, stores, canvas      │   paged DTOs, progress events, plans       │  (Tauri app)     │  │
+  ┌──────────────▼──────────────┐        direct calls (Arc<Snapshot>)         ┌──────────────────┐  │
+  │  GPUI app (ferriscan-app)   │ ◄────────────────────────────────────────► │  engine crates   │  │
+  │  views, theme, painters     │   background tasks, progress counters      │  (same process)  │  │
   └─────────────────────────────┘                                            └───────┬──────────┘  │
                                                                                      │             │
                                           ┌──────────────────────────────────────────┼─────────────┘
@@ -330,12 +330,12 @@ Slint) and `docs/adr/0005-gpui-native-ui.md` for the GPUI migration.
 
 Rules:
 
-- `ferriscan-core` has **no** Tauri, no OS-specific `cfg` beyond a narrow platform trait, and no
+- `ferriscan-core` has **no** UI dependency, no OS-specific `cfg` beyond a narrow platform trait, and no
   filesystem mutation. It is testable on any machine with a synthetic filesystem trait.
 - `ferriscan-platform` owns every `unsafe` OS call and every `cfg(target_os)`.
 - `ferriscan-actions` is the only crate allowed to delete/move/copy user data.
-- The Tauri app crate is a thin composition root: commands, state, window/theme wiring.
-- The frontend never receives the whole tree; it receives pages, aggregates and precomputed
+- The app crate (`ferriscan-app`) is the composition root: views, theme, state, background tasks.
+- Views never walk the whole tree per frame; they use paged queries, aggregates and cached
   layout rectangles.
 
 ### 7.3 State ownership
@@ -345,9 +345,8 @@ Rules:
 - `Snapshot` is immutable and `Arc`-shared; patching after a mutation creates a new snapshot
   (structural sharing of untouched subtrees is *not* attempted in v1; a patch clones the node
   vectors, acceptable because it happens at human pace and is chunked).
-- Frontend stores: `session` (snapshot meta), `navigation` (current node id, breadcrumb),
-  `view` (mode, sort, filters), `selection`, `scan` (progress), `settings`, `toasts`.
-  Only `session/navigation/view/selection` are persisted (view state per volume, never paths).
+- UI state lives in the `Shell` entity: scan state, results (snapshot, current folder, rows),
+  selection, view mode, settings, toasts. Only settings are persisted (never paths).
 
 ---
 
@@ -387,7 +386,7 @@ benchmarks so results are reproducible.
 
 Every failure maps to a stable code (`E_PERM`, `E_NOTFOUND`, `E_TOOLONG`, `E_LOOP`,
 `E_IO`, `E_INVALID`, `E_BUSY`, `E_CANCELLED`, `E_UNSUPPORTED`) with structured context
-(path hash, operation, OS error number). Codes are localized in the frontend; raw OS messages
+(path hash, operation, OS error number). Codes are localized through `ferriscan-i18n`; raw OS messages
 are shown in an expandable "technical details" block.
 
 ### 8.4 Cancellation and lifecycle
@@ -476,65 +475,40 @@ Computed once at finalize and cached in the snapshot:
 
 ### 9.3 DTOs at the boundary
 
-All IPC DTOs are `serde` structs with `camelCase` renaming, integer byte sizes, string enums, and
+DTOs shared with the CLI and persistence are `serde` structs with `camelCase` renaming, integer byte sizes, string enums, and
 explicit `null` for unknown values. Node identity is `u32`; no DTO ever contains the full tree.
-See §10.
+See §10 for the engine API the UI calls.
 
 ---
 
-## 10. IPC contract
+## 10. Engine API
 
-Names are stable; adding fields is allowed, removing/renaming requires a version bump and a
-frontend contract test.
+There is no IPC. `ferriscan-app` calls the engine crates in-process; blocking work runs on the
+GPUI background executor and results return to the view with `this.update`. Public engine
+functions keep stable names; changing a signature needs a note in the PR and tests.
 
-### 10.1 Commands
+| UI need | Engine call |
+| --- | --- |
+| List volumes | `ferriscan_platform::list_volumes` |
+| Scan | `ferriscan_core::scan::scan` with `Progress` and `CancelToken` (polled at 10 Hz) |
+| Children page / breadcrumb | `ferriscan_core::query::children_page`, `NodeStore::relative_path` |
+| Treemap / sunburst | `ferriscan_core::layout::{treemap, sunburst}` (flat tile/arc arrays) |
+| Search | `ferriscan_core::query::search` |
+| Plan, execute | `ferriscan_actions::plan`, `ferriscan_actions::execute::execute` |
+| Open, show in folder, trash | `ferriscan_platform::shell::{open_path, trash}` (via actions for trash) |
+| Settings | `ferriscan_persist::Settings::{load, save}` |
+| Strings | `ferriscan_i18n::Catalog` |
 
-| Command | Input | Output | Notes |
-| --- | --- | --- | --- |
-| `list_volumes` | — | `VolumeDto[]` | Cheap; polled only while visible |
-| `start_scan` | `ScanRequest` | `ScanHandleDto` | Fails with `E_BUSY` if a scan is active |
-| `cancel_scan` | — | `()` | Idempotent |
-| `get_scan_state` | — | `ScanStateDto` | Fallback after a webview reload |
-| `get_snapshot_meta` | — | `SnapshotMetaDto \| null` | Drives the session header |
-| `get_node` | `{ nodeId }` | `NodeDto` | Name, size, flags, path (lazy-built) |
-| `get_children` | `{ nodeId, sort, dir, filter, offset, limit }` | `ChildrenPageDto` | Pagination, ≤ 500 rows/page |
-| `get_breadcrumb` | `{ nodeId }` | `CrumbDto[]` | Root → node |
-| `get_treemap` | `{ nodeId, maxDepth, budget }` | `TreemapDto` | Precomputed rects (flat arrays) |
-| `get_sunburst` | `{ nodeId, maxDepth, budget }` | `SunburstDto` | Precomputed arc ranges |
-| `get_extensions` | `{ nodeId, limit }` | `ExtensionStatDto[]` | Scoped to subtree |
-| `get_largest_files` | `{ nodeId, limit }` | `NodeDto[]` | Respects filters |
-| `search` | `{ query, limit }` | `SearchHitDto[]` | Path strings built server-side |
-| `plan_action` | `ActionRequest` | `ActionPlanDto` | Pure; no mutation |
-| `execute_action` | `{ planId, confirmToken }` | `ActionReportDto` | Requires the token from the plan |
-| `undo_action` | `{ journalId }` | `ActionReportDto` | Moves/copies only |
-| `reveal_in_file_manager` | `{ nodeId }` | `()` | argv-based |
-| `open_path` | `{ nodeId }` | `()` | OS association |
-| `copy_path_to_clipboard` | `{ nodeId }` | `()` | Text only |
-| `export_report` | `{ format, scope }` | `{ savedPath }` | CSV/JSON, dialog-driven |
-| `get_settings` / `set_settings` | — / `SettingsDto` | `SettingsDto` | Debounced by the UI |
-| `set_theme_preference` | `{ mode }` | `()` | `system|light|dark`; also updates native window |
-| `get_system_info` | — | `SystemInfoDto` | Locale, theme, high-contrast, reduced-motion, accent |
-| `open_log_folder` | — | `()` | Diagnostics |
+Rules:
 
-### 10.2 Events
-
-| Event | Payload | Rate |
-| --- | --- | --- |
-| `scan://progress` | `ScanProgressDto` | ≤ 10 Hz |
-| `scan://done` | `SnapshotMetaDto` | once |
-| `scan://error` | `ScanErrorDto` | once per fatal error |
-| `action://progress` | `ActionProgressDto` | ≤ 10 Hz |
-| `system://theme` | `{ mode, accent, highContrast }` | on OS change |
-| `settings://changed` | `SettingsDto` | on external file change |
-
-### 10.3 Contract rules
-
-- All commands are `async` from the webview's perspective; Rust-side heavy work goes to
-  `tauri::async_runtime::spawn_blocking` or the scan pool.
-- Errors serialize as `{ code, message, details?, retryable }`.
-- A contract test generates a JSON schema snapshot of every DTO and fails on unannounced changes
-  (`tests/contract/`).
-- Payload sizes are asserted in benchmarks (see §6.3).
+- The UI keeps node IDs and resolves paths from the snapshot at the point of use.
+- Every mutation goes through `ferriscan-actions` (plan, review, execute). ADR-0003 designed an
+  HMAC confirm token against a compromised webview; the native UI runs plan then execute
+  in-process without that token today. Whether to keep, adapt or retire the token is an open
+  item for `security-reviewer` (tracked in ADR-0005 follow-ups), not a decision made here.
+- Errors carry stable `ErrorCode`s mapped to `error.*` catalog messages.
+- DTO page caps (≤ 500 rows) still apply to `children_page`; the table builds its own full
+  sorted list for virtualized display.
 
 ---
 
@@ -545,7 +519,7 @@ frontend contract test.
 - **Algorithm**: squarified (Bruls et al.), computed in Rust over the node subtree, depth-limited
   (default 8) and budget-limited (default 5,000 rectangles). Remaining children are aggregated
   into a `+ N more` cell that is not clickable but shows tooltip totals.
-- **Rendering**: Canvas 2D, one draw per layout change; hover uses a hit-grid (spatial hash)
+- **Rendering**: GPUI `paint_quad`, layout cached per folder and size; hover uses the cached rectangles (a spatial hash is the upgrade path)
   rather than per-rect DOM nodes. Text labels only when the rect exceeds measured thresholds.
 - **Color**: by extension family (categorical palette, 12 hues, lightness ramps by depth),
   or by age / size / type via a legend toggle. Palette is color-blind safe and contrast-checked.
@@ -556,7 +530,7 @@ frontend contract test.
 
 ### 11.2 Sunburst (secondary)
 
-- Two-level minimum; arc angles computed in Rust, rendered to canvas with a hover highlight.
+- Two-level minimum; arc angles computed in Rust, painted with a hover highlight.
 - Same zoom/select semantics as the treemap; center label shows current root.
 
 ### 11.3 Tree table (authoritative)
@@ -708,25 +682,22 @@ Blocking is evaluated on canonical, case-normalized paths with symlink resolutio
   "Accessible data" toggle (screen-reader users get real `<table>` markup).
 - Focus is visible (3:1 against adjacent colors) and never trapped.
 - Announcements via an `aria-live="polite"` region for scan start/end, action results, errors.
-- Automated axe-core checks in Playwright; manual screen-reader pass per release (NVDA on
-  Windows, Orca on Linux, VoiceOver on macOS).
+- Accessibility goes through GPUI's AccessKit integration, which is not yet verified here (see
+  ADR-0005 risks). Manual screen-reader pass per release (Narrator/NVDA on Windows, Orca on
+  Linux, VoiceOver on macOS) until automated checks exist.
 
 ---
 
 ## 16. Security model
 
-- **WebView boundary**: strict CSP (`default-src 'self'; script-src 'self'; style-src 'self'
-  'unsafe-inline'; img-src 'self' data:; connect-src ipc: http://ipc.localhost`), no remote
-  content, no `eval`, asset protocol disabled.
-- **Tauri capabilities**: minimal allowlist — custom commands only; `dialog` and `opener`
-  plugins scoped to their exact needs; no `fs` plugin, no `shell` plugin, no global `http`.
-- **Path handling**: all paths received from the frontend are *node IDs*, not strings. The
-  backend resolves paths from its own snapshot, eliminating path injection. The few commands
-  that accept a path (export destination) come from the native save dialog.
+- **No embedded browser**: the UI is native GPUI, so there is no CSP, remote content or
+  capability allowlist to maintain.
+- **Path handling**: the UI keeps *node IDs*; paths are resolved from the snapshot when an
+  action runs. Paths from outside (export destination) come from a native dialog.
 - **Command execution**: never a shell. `Command::new(program).args([...])` only, with a
   per-platform constant program list.
-- **Supply chain**: `cargo deny` (advisories, licenses, sources), `cargo audit` in CI, npm
-  lockfile + `npm audit --omit=dev`, Dependabot/Renovate, signed releases, SLSA-style build
+- **Supply chain**: `cargo deny` (advisories, licenses, sources), `cargo audit` in CI,
+  Dependabot/Renovate (GPUI is a pinned git revision bumped by hand), signed releases, SLSA-style build
   provenance where feasible.
 - **Elevation**: none in v1.0. The app never asks for admin/root; protected-path operations
   fail with a clear message. A privileged helper is explicitly a non-goal until designed in an
@@ -734,8 +705,7 @@ Blocking is evaluated on canonical, case-normalized paths with symlink resolutio
 - **Updates**: disabled in v1.0 builds; when enabled later, signed manifests with minisign and
   opt-in.
 - **Threat model** (abridged): malicious filesystem content (weird names, sparse, devices,
-  FIFOs) → treated as data, never opened; compromised webview → limited to the IPC surface
-  which is node-id based; local attacker with write access to settings → out of scope beyond
+  FIFOs) → treated as data, never opened; a bug in a view → limited by the plan/execute flow in `ferriscan-actions`; local attacker with write access to settings → out of scope beyond
   schema validation and size caps.
 
 ---
@@ -752,17 +722,16 @@ Blocking is evaluated on canonical, case-normalized paths with symlink resolutio
 | FakeFs integration | synthetic trees: 1M files, 200k siblings, deep chains, unicode, symlink loops, permission errors | all scan paths |
 | Platform integration | real temp dirs, real volumes where available, CI matrix | Windows/macOS/Linux |
 | Action safety | table-driven plan/execute/undo scenarios incl. conflicts and TOCTOU | every branch |
-| Frontend unit | Vitest + Testing Library (Svelte) | ≥ 80 % on stores/utils |
-| E2E | Playwright + `tauri-driver` (Windows/Linux) | 12 critical journeys |
-| Accessibility | axe-core in E2E + manual checklist | zero serious violations |
+| UI logic | `#[cfg(test)]` in `ferriscan-app` (layout cache, hit-testing, navigation, formatting) and GPUI `TestAppContext` | all pure view logic |
+| Visual smoke | launch + `scripts/screenshot.ps1` | key screens, light and dark |
+| Accessibility | manual checklist with a screen reader | zero blocking issues |
 | Performance | Criterion + budget gate | see §6.3 |
 
 ### 17.2 CI matrix
 
 - `fmt` → `clippy -D warnings` → `cargo deny` → `test` (Linux, Windows, macOS) →
-  `i18n-check` → frontend `typecheck` → `lint` → `vitest` → `build` → E2E (nightly) →
-  benchmarks (nightly + PR label `perf`).
-- Every PR must keep the contract snapshot, locale completeness and budgets green.
+  `i18n-check` → benchmarks (nightly + PR label `perf`).
+- Every PR must keep locale completeness and budgets green.
 
 ### 17.3 Definition of done (per feature)
 
@@ -779,15 +748,15 @@ Blocking is evaluated on canonical, case-normalized paths with symlink resolutio
 ## 18. Packaging, updates and distribution
 
 - **Windows**: NSIS per-user installer, MSI optional; x64 + arm64; code signing via Azure Trusted
-  Signing or an OV certificate. WebView2 bootstrapper with evergreen runtime detection.
+  Signing or an OV certificate. No runtime prerequisite (no WebView2).
 - **Linux**: AppImage (portable), `.deb`, `.rpm`; `.desktop` entry, AppStream metadata, icons at
-  16–512 px; depends on `libwebkit2gtk-4.1`, `libgtk-3`.
+  16–512 px; needs Vulkan, fontconfig, xkbcommon and Wayland/X11 client libraries.
 - **macOS**: universal or per-arch `.dmg`; hardened runtime, notarization, `LSMinimumSystemVersion`
   11.0; microphone/camera/automation entitlements absent.
 - **Versioning**: SemVer; `0.x` until feature-complete, `1.0.0` at milestone M12.
 - **Channels**: stable only in v1.0; nightly builds from `main` for testers.
 - **Reproducibility**: pinned toolchain via `rust-toolchain.toml`, `Cargo.lock` committed,
-  `npm ci`, build script records commit SHA and target triple in the About dialog.
+  build script records commit SHA and target triple in the About dialog.
 
 ---
 
@@ -797,9 +766,9 @@ Blocking is evaluated on canonical, case-normalized paths with symlink resolutio
 | --- | --- | --- |
 | Metadata APIs behave differently under antivirus/EDR filters | Scan errors, slowness | Error taxonomy, per-directory resilience, documented diagnostics, test on Defender/CrowdStrike-enabled VMs |
 | Windows long paths and reparse points (OneDrive) | Wrong sizes, recursion loops | `\\?\` everywhere, reparse-point detection, loop guard, `FILE_ATTRIBUTE_REPARSE_POINT` handling |
-| Tauri IPC serialization cost for huge pages | Jank | Hard page caps, flat arrays for layouts, payload benchmarks |
+| GPUI is pre-1.0 and tied to Zed | API breaks, Rust version pressure | Pinned git revision, bumps as their own task, ADR-0005 risk list |
 | Accidental data loss from actions | Reputation-destroying | Plan/confirm/token, trash default, journaled undo, protected paths, extensive action tests |
-| WebView2 absence on old Windows | App cannot start | Bootstrapper + clear error page; documented minimum |
+| GPU/driver problems with GPUI rendering | App cannot draw | Documented minimums, fallback story to be tested (PLATFORM_MATRIX) |
 | Localization drift | Half-translated UI | CI key check, `en` fallback, translation issue template |
 | Scope creep toward monitoring/cloud | Delays v1.0 | Anti-goals in §1, roadmap gate reviews |
 | macOS signing cost | Distribution friction | Unsigned dev builds documented; CI signs when secrets exist |
