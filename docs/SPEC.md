@@ -115,8 +115,7 @@ without sending a single byte anywhere.
 ### 3.2 Out of scope for v1.0
 
 Scheduled scans, watchers, duplicate detection, archive inspection (zip contents), cloud
-providers, MFT/USN direct journal parsing (evaluated for v1.2), elevated helper service,
-CLI daemon, plugin system, custom chart scripting.
+providers, USN journal watching, elevated helper service, CLI daemon, plugin system, custom chart scripting.
 
 ### 3.3 Explicit platform parity rules
 
@@ -699,9 +698,10 @@ Blocking is evaluated on canonical, case-normalized paths with symlink resolutio
 - **Supply chain**: `cargo deny` (advisories, licenses, sources), `cargo audit` in CI,
   Dependabot/Renovate (GPUI is a pinned git revision bumped by hand), signed releases, SLSA-style build
   provenance where feasible.
-- **Elevation**: none in v1.0. The app never asks for admin/root; protected-path operations
-  fail with a clear message. A privileged helper is explicitly a non-goal until designed in an
-  ADR.
+- **Elevation**: never by default. The app starts and scans unelevated and protected-path
+  operations fail with a clear message. The only exception is the opt-in Windows fast scan
+  (ADR-0006): the user explicitly relaunches the whole app elevated, which then reads the NTFS
+  MFT read-only. There is no privileged helper or service.
 - **Updates**: disabled in v1.0 builds; when enabled later, signed manifests with minisign and
   opt-in.
 - **Threat model** (abridged): malicious filesystem content (weird names, sparse, devices,

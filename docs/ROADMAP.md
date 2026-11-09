@@ -265,7 +265,7 @@ still run with documented warnings.
 | Idea | Value | Notes |
 | --- | --- | --- |
 | Duplicate finder (size + partial hash + full hash) | High | Needs hashing pool and UI |
-| USN journal / MFT fast scan on NTFS | Very high | Windows-only fast path, ADR required |
+| USN journal / MFT fast scan on NTFS | Very high | Done as an opt-in elevated read-only MFT scan, ADR-0006 |
 | Scheduled scans + history | Medium | Requires persisted snapshots and retention policy |
 | Snapshot cache and diff between scans | Medium | "What grew since last week" |
 | Archive inspection (zip/7z listing) | Medium | Memory and parsing risk |
