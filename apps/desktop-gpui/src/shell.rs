@@ -7,7 +7,7 @@ use std::{
 };
 
 use ferriscan_core::{
-    model::Snapshot,
+    model::{Snapshot, SnapshotStatus},
     scan::{ScanOptions, controller::CancelToken, progress::Progress, scan},
 };
 use ferriscan_i18n::Catalog;
@@ -30,6 +30,15 @@ enum ScanUi {
     Failed(String),
 }
 
+/// A transient message; removed after [`TOAST_LIFETIME`] or when clicked.
+struct Toast {
+    id: u64,
+    text: String,
+    error: bool,
+}
+
+const TOAST_LIFETIME: Duration = Duration::from_secs(5);
+
 /// Root view. Holds everything the shell renders; no OS calls happen in `render`.
 pub struct Shell {
     settings: Settings,
@@ -37,6 +46,8 @@ pub struct Shell {
     volumes: Vec<Volume>,
     loading: bool,
     scan: ScanUi,
+    toasts: Vec<Toast>,
+    next_toast: u64,
     progress: Arc<Progress>,
     cancel: Arc<CancelToken>,
 }
@@ -50,6 +61,8 @@ impl Shell {
             volumes: Vec::new(),
             loading: false,
             scan: ScanUi::Idle,
+            toasts: Vec::new(),
+            next_toast: 0,
             progress: Arc::new(Progress::new()),
             cancel: Arc::new(CancelToken::new()),
         };
@@ -118,14 +131,39 @@ impl Shell {
             let result = task.await;
             drop(ticker);
             let _ = this.update(cx, |this, cx| {
+                let (text, error) = match &result {
+                    Ok(s) if s.status == SnapshotStatus::Cancelled => {
+                        (this.catalog.t("scan.cancelled").to_string(), false)
+                    }
+                    Ok(_) => (this.catalog.t("scan.ready").to_string(), false),
+                    Err(e) => (format!("{}: {e}", this.catalog.t("scan.failed")), true),
+                };
                 this.scan = match result {
                     Ok(snapshot) => ScanUi::Done(Arc::new(snapshot)),
                     Err(err) => ScanUi::Failed(err.to_string()),
                 };
-                cx.notify();
+                this.push_toast(text, error, cx);
             });
         })
         .detach();
+    }
+
+    /// Shows `text` for [`TOAST_LIFETIME`]; the timer is dropped with the view.
+    fn push_toast(&mut self, text: String, error: bool, cx: &mut Context<Self>) {
+        let id = self.next_toast;
+        self.next_toast += 1;
+        self.toasts.push(Toast { id, text, error });
+        cx.notify();
+        cx.spawn(async move |this, cx| {
+            cx.background_executor().timer(TOAST_LIFETIME).await;
+            let _ = this.update(cx, |this, cx| this.dismiss_toast(id, cx));
+        })
+        .detach();
+    }
+
+    fn dismiss_toast(&mut self, id: u64, cx: &mut Context<Self>) {
+        self.toasts.retain(|t| t.id != id);
+        cx.notify();
     }
 
     fn status_text(&self) -> String {
@@ -272,8 +310,27 @@ impl Render for Shell {
 
         let status = self.status_text();
         let running = matches!(self.scan, ScanUi::Running { .. });
+        let toasts: Vec<_> = self
+            .toasts
+            .iter()
+            .map(|toast| {
+                let id = toast.id;
+                div()
+                    .id(("toast", id))
+                    .px(px(12.))
+                    .py(px(8.))
+                    .rounded(px(8.))
+                    .bg(th.surface)
+                    .border_1()
+                    .border_color(if toast.error { th.danger } else { th.border })
+                    .cursor_pointer()
+                    .on_click(cx.listener(move |this, _, _, cx| this.dismiss_toast(id, cx)))
+                    .child(toast.text.clone())
+            })
+            .collect();
 
         div()
+            .relative()
             .size_full()
             .flex()
             .flex_col()
@@ -345,6 +402,16 @@ impl Render for Shell {
                                 .child(t("scan.cancel")),
                         )
                     }),
+            )
+            .child(
+                div()
+                    .absolute()
+                    .bottom(px(40.))
+                    .right(px(16.))
+                    .flex()
+                    .flex_col()
+                    .gap(px(8.))
+                    .children(toasts),
             )
     }
 }
