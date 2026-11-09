@@ -14,7 +14,15 @@ targets = [
 [advisories]
 version = 2
 yanked = "deny"
-ignore = []
+# All entries are "unmaintained" notices (not vulnerabilities) for transitive GPUI dependencies we
+# cannot replace (ADR-0005). Re-check on every GPUI revision bump and remove when fixed upstream.
+ignore = [
+  { id = "RUSTSEC-2026-0206", reason = "rustybuzz unmaintained; text shaping inside GPUI" },
+  { id = "RUSTSEC-2026-0192", reason = "ttf-parser unmaintained; font parsing inside GPUI" },
+  { id = "RUSTSEC-2026-0370", reason = "zvariant unmaintained; Linux D-Bus stack of GPUI" },
+  { id = "RUSTSEC-2026-0371", reason = "zbus_names unmaintained; Linux D-Bus stack of GPUI" },
+  { id = "RUSTSEC-2026-0372", reason = "zvariant_derive unmaintained; Linux D-Bus stack of GPUI" },
+]
 
 [licenses]
 version = 2
@@ -40,6 +48,8 @@ allow = [
 [bans]
 multiple-versions = "warn"
 wildcards = "deny"
+# Workspace crates depend on each other by path without a version.
+allow-wildcard-paths = true
 highlight = "all"
 deny = [
   # No network stack in v1.0 (ADR-0004). Dev-dependencies are exempt by policy review,
@@ -56,4 +66,7 @@ unknown-registry = "deny"
 unknown-git = "deny"
 allow-registry = ["https://github.com/rust-lang/crates.io-index"]
 # GPUI is only available from the Zed repository (ADR-0005); keep the allowance to this one org.
-allow-git = ["https://github.com/zed-industries/zed"]
+allow-git = [
+  "https://github.com/zed-industries/zed",
+  "https://github.com/zed-industries/oo7", # Zed fork pulled in by GPUI on Linux
+]
