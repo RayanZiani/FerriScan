@@ -41,8 +41,8 @@ pub struct ActionReport {
 
 /// Executes every ready item of `plan`.
 ///
-/// Only [`ActionKind::Rename`] and same-volume [`ActionKind::Move`] are
-/// implemented so far; the others return `E_UNSUPPORTED` per item rather than
+/// Only [`ActionKind::Rename`], same-volume [`ActionKind::Move`] and
+/// [`ActionKind::Trash`] (Windows) are implemented so far; the others return `E_UNSUPPORTED` per item rather than
 /// pretending to work.
 pub fn execute(plan: &ActionPlan) -> ActionReport {
     let mut report = ActionReport::default();
@@ -53,7 +53,7 @@ pub fn execute(plan: &ActionPlan) -> ActionReport {
                 report.bytes = report.bytes.saturating_add(item.size);
             }
             Ok(ItemOutcome::Skipped) => report.skipped += 1,
-            Ok(ItemOutcome::Failed) | Err(_) => {
+            Ok(ItemOutcome::Failed) => {
                 report.failed += 1;
                 report.failures.push((
                     item.source.display().to_string(),
@@ -61,6 +61,12 @@ pub fn execute(plan: &ActionPlan) -> ActionReport {
                         .clone()
                         .unwrap_or_else(|| "operation failed".to_string()),
                 ));
+            }
+            Err((_, message)) => {
+                report.failed += 1;
+                report
+                    .failures
+                    .push((item.source.display().to_string(), message));
             }
         }
     }
@@ -70,6 +76,9 @@ pub fn execute(plan: &ActionPlan) -> ActionReport {
 fn execute_item(kind: ActionKind, item: &PlanItem) -> Result<ItemOutcome, (ErrorCode, String)> {
     if item.status != PlanStatus::Ready {
         return Ok(ItemOutcome::Skipped);
+    }
+    if kind == ActionKind::Trash {
+        return trash_item(item);
     }
     let Some(destination) = &item.destination else {
         return Err((ErrorCode::Unsupported, "no destination".into()));
@@ -92,6 +101,22 @@ fn execute_item(kind: ActionKind, item: &PlanItem) -> Result<ItemOutcome, (Error
             format!("{kind:?} is not implemented yet"),
         )),
     }
+}
+
+/// Sends one item to the recycle bin through the platform shell.
+fn trash_item(item: &PlanItem) -> Result<ItemOutcome, (ErrorCode, String)> {
+    ferriscan_platform::shell::trash(&item.source)
+        .map(|()| ItemOutcome::Done)
+        .map_err(|e| {
+            let code = match e.kind() {
+                std::io::ErrorKind::Unsupported => ErrorCode::Unsupported,
+                std::io::ErrorKind::Interrupted => ErrorCode::Cancelled,
+                std::io::ErrorKind::NotFound => ErrorCode::NotFound,
+                std::io::ErrorKind::PermissionDenied => ErrorCode::PermissionDenied,
+                _ => ErrorCode::Io,
+            };
+            (code, e.to_string())
+        })
 }
 
 fn same_volume(a: &Path, b: &Path) -> bool {
@@ -140,6 +165,18 @@ mod tests {
         assert!(dest_dir.join("a.txt").exists());
         assert!(!file.exists());
         let _ = std::fs::remove_dir_all(&dir);
+    }
+
+    #[cfg(windows)]
+    #[test]
+    fn trash_removes_the_file_and_reports_success() {
+        let file =
+            std::env::temp_dir().join(format!("ferriscan-exec-trash-{}.txt", std::process::id()));
+        std::fs::write(&file, b"hello").expect("write");
+        let p = plan(ActionKind::Trash, std::slice::from_ref(&file), None).expect("plan");
+        let report = execute(&p);
+        assert_eq!(report.succeeded, 1, "{:?}", report.failures);
+        assert!(!file.exists());
     }
 
     #[test]
