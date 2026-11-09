@@ -9,6 +9,7 @@
 
 pub mod dir_reader;
 pub mod elevation;
+pub mod locale;
 pub mod mft;
 pub mod shell;
 pub mod volumes;

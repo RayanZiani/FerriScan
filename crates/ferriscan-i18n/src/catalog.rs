@@ -8,6 +8,8 @@
 use std::collections::HashMap;
 
 const EN: &str = include_str!("../locales/en.ftl");
+const FR: &str = include_str!("../locales/fr.ftl");
+const ZH_CN: &str = include_str!("../locales/zh-CN.ftl");
 
 /// Active message table with English fallback.
 #[derive(Clone, Debug)]
@@ -30,6 +32,19 @@ impl Catalog {
             english: parse(EN),
             active: HashMap::new(),
         }
+    }
+
+    /// Builds a catalogue for a normalized locale tag (`en`, `fr`, `zh-CN`). A tag without a
+    /// translation shows English.
+    #[must_use]
+    pub fn for_locale(tag: &str) -> Self {
+        let mut catalog = Self::new();
+        match tag {
+            "fr" => catalog.load(FR),
+            "zh-CN" => catalog.load(ZH_CN),
+            _ => {}
+        }
+        catalog
     }
 
     /// Layers a translated `.ftl` source over English.
@@ -75,6 +90,13 @@ fn parse(source: &str) -> HashMap<String, String> {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn shipped_translations_load() {
+        assert_eq!(Catalog::for_locale("fr").t("nav.settings"), "Réglages");
+        assert_eq!(Catalog::for_locale("zh-CN").t("nav.settings"), "设置");
+        assert_eq!(Catalog::for_locale("de").t("nav.settings"), "Settings");
+    }
 
     #[test]
     fn english_is_loaded_and_interpolates() {

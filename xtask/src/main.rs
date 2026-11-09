@@ -71,6 +71,17 @@ fn parse_ftl(text: &str) -> BTreeMap<String, BTreeSet<String>> {
     out
 }
 
+/// Keys defined more than once in one file (the later definition silently wins).
+fn duplicate_keys(text: &str) -> Vec<String> {
+    let mut seen = BTreeSet::new();
+    text.lines()
+        .filter(|l| !l.trim_start().starts_with('#'))
+        .filter_map(|l| l.split_once(" = "))
+        .map(|(k, _)| k.trim().to_string())
+        .filter(|k| !seen.insert(k.clone()))
+        .collect()
+}
+
 /// String literals that look like message keys (`area.name`, lowercase, dots and underscores).
 fn literal_keys(source: &str) -> Vec<String> {
     let mut keys = Vec::new();
@@ -106,15 +117,26 @@ fn rust_files(dir: &Path, out: &mut Vec<PathBuf>) {
 /// written as a literal in the UI code must exist in English.
 fn i18n_check() -> Result<(), String> {
     let read = |p: &Path| fs::read_to_string(p).map_err(|e| format!("{}: {e}", p.display()));
-    let en = parse_ftl(&read(&Path::new(LOCALES).join("en.ftl"))?);
+    let en_text = read(&Path::new(LOCALES).join("en.ftl"))?;
+    let en = parse_ftl(&en_text);
     let mut problems = Vec::new();
+    for key in duplicate_keys(&en_text) {
+        problems.push(format!("en.ftl: duplicate key `{key}`"));
+    }
 
     for entry in fs::read_dir(LOCALES).map_err(|e| e.to_string())?.flatten() {
         let path = entry.path();
         if path.extension().is_none_or(|e| e != "ftl") || path.ends_with("en.ftl") {
             continue;
         }
-        let other = parse_ftl(&read(&path)?);
+        let text = read(&path)?;
+        let other = parse_ftl(&text);
+        for key in duplicate_keys(&text) {
+            problems.push(format!("{}: duplicate key `{key}`", path.display()));
+        }
+        for key in other.keys().filter(|k| !en.contains_key(*k)) {
+            problems.push(format!("{}: key `{key}` is not in en.ftl", path.display()));
+        }
         for (key, holders) in &en {
             match other.get(key) {
                 None => problems.push(format!("{}: missing key `{key}`", path.display())),
@@ -189,7 +211,7 @@ fn main() {
 
 #[cfg(test)]
 mod tests {
-    use super::{bump, literal_keys, parse_ftl};
+    use super::{bump, duplicate_keys, literal_keys, parse_ftl};
 
     #[test]
     fn ftl_placeholders_and_literal_keys_are_found() {
@@ -201,6 +223,15 @@ c.d = plain
         );
         assert_eq!(ftl["a.b"].len(), 2);
         assert!(ftl["c.d"].is_empty());
+        assert_eq!(
+            duplicate_keys(
+                "a = 1
+b = 2
+a = 3
+"
+            ),
+            ["a"]
+        );
         assert_eq!(literal_keys(r#"t("a.b"); "Not.key"; "x""#), ["a.b"]);
     }
 

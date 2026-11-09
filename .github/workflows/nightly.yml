@@ -1,8 +1,7 @@
 name: nightly
 
+# Manual only until `xtask fixtures` and `xtask budget` exist (they are still stubs).
 on:
-  schedule:
-    - cron: "0 3 * * 1-5"
   workflow_dispatch:
 
 jobs:

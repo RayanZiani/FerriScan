@@ -15,6 +15,10 @@ pub const SHIPPED: &[&str] = &[
     "en", "fr", "de", "es", "it", "pt-BR", "nl", "pl", "ru", "tr", "ja", "zh-CN",
 ];
 
+/// Languages with a translation compiled in, as `(tag, name in that language)`.
+pub const LANGUAGES: &[(&str, &str)] =
+    &[("en", "English"), ("fr", "Français"), ("zh-CN", "简体中文")];
+
 /// Fallback locale when nothing else matches.
 pub const FALLBACK: &str = "en";
 
@@ -68,6 +72,16 @@ pub fn normalize(raw: &str) -> Option<String> {
         .iter()
         .find(|l| l.split('-').next() == Some(language.as_str()))
         .map(|l| (*l).to_string())
+}
+
+/// Like [`resolve`] but with the operating system's locale supplied by the caller (Windows does
+/// not put it in the environment, so the platform crate reads it).
+#[must_use]
+pub fn resolve_with(override_tag: Option<&str>, system: Option<&str>) -> String {
+    override_tag
+        .and_then(normalize)
+        .or_else(|| system.and_then(normalize))
+        .unwrap_or_else(detect_system_locale)
 }
 
 /// Resolves the locale to use, given an optional user override.

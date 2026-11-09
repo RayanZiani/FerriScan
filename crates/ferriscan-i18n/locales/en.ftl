@@ -110,7 +110,6 @@ settings.units_binary = Binary (KiB, MiB)
 settings.units_decimal = Decimal (kB, MB)
 settings.scan = Scanning
 settings.include_hidden = Include hidden and system files
-settings.threads = Worker threads (0 = automatic)
 settings.excludes = Excluded names or patterns
 settings.privacy = Privacy
 settings.keep_cache = Keep scan cache between sessions

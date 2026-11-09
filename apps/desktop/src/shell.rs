@@ -29,6 +29,13 @@ use gpui::prelude::FluentBuilder as _;
 use crate::{format, results::Results, theme::Theme, treemap::TreemapState};
 
 /// One selectable value of a setting: label, whether it is current, how to apply it.
+/// Message catalogue for the language the user picked, or the system language.
+fn catalog_for(settings: &Settings) -> Catalog {
+    let system = ferriscan_platform::locale::system_locale();
+    let tag = ferriscan_i18n::resolve_with(settings.language.as_deref(), system.as_deref());
+    Catalog::for_locale(&tag)
+}
+
 type SettingChoice = (String, bool, fn(&mut Settings));
 
 /// A validated destructive action waiting for the user's confirmation.
@@ -95,10 +102,11 @@ pub struct Shell {
 impl Shell {
     pub fn new(cx: &mut Context<Self>) -> Self {
         let dirs = app_dirs("FerriScan");
+        let settings = Settings::load(&dirs.settings_file());
         let mut shell = Self {
-            settings: Settings::load(&dirs.settings_file()),
             dirs,
-            catalog: Catalog::new(),
+            catalog: catalog_for(&settings),
+            settings,
             volumes: Vec::new(),
             loading: false,
             scan: ScanUi::Idle,
@@ -752,6 +760,7 @@ impl Shell {
     /// Applies `change`, persists the result and reports a failed save as a toast.
     fn update_settings(&mut self, change: impl FnOnce(&mut Settings), cx: &mut Context<Self>) {
         change(&mut self.settings);
+        self.catalog = catalog_for(&self.settings);
         if self.settings.save(&self.dirs.settings_file()).is_err() {
             let text = self.catalog.t("common.error").to_string();
             self.push_toast(text, true, cx);
@@ -832,6 +841,30 @@ impl Shell {
                     (t("settings.density_compact"), s.compact_density, |s| {
                         s.compact_density = true;
                     }),
+                ],
+            ))
+            .child(group(
+                "language",
+                t("settings.language"),
+                vec![
+                    (t("settings.language_system"), s.language.is_none(), |s| {
+                        s.language = None;
+                    }),
+                    ("English".into(), s.language.as_deref() == Some("en"), |s| {
+                        s.language = Some("en".into());
+                    }),
+                    (
+                        "Français".into(),
+                        s.language.as_deref() == Some("fr"),
+                        |s| {
+                            s.language = Some("fr".into());
+                        },
+                    ),
+                    (
+                        "简体中文".into(),
+                        s.language.as_deref() == Some("zh-CN"),
+                        |s| s.language = Some("zh-CN".into()),
+                    ),
                 ],
             ))
             .child(group(
