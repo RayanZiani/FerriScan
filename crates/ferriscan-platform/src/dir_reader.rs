@@ -81,6 +81,7 @@ fn read_dir_impl(dir: &Path, out: &mut Vec<RawEntry>) -> Result<(), FsError> {
             readonly: metadata.permissions().readonly(),
             system: false,
             shared: false,
+            key: 0,
         });
     }
     Ok(())

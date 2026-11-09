@@ -182,6 +182,7 @@ fn to_entry(name: &str, node: &Node) -> RawEntry {
             readonly: false,
             system: false,
             shared: false,
+            key: 0,
         },
         Node::Failing(_) => RawEntry::dir(name),
     }

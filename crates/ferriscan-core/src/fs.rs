@@ -21,4 +21,6 @@ pub struct DirJob {
     pub path: std::path::PathBuf,
     /// Depth of the directory itself.
     pub depth: u16,
+    /// Reader token for the directory (see [`DirReader::read_dir_keyed`]).
+    pub key: u64,
 }
