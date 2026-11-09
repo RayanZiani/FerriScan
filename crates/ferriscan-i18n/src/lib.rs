@@ -1,10 +1,14 @@
 //! Locale detection and the list of shipped locales.
 //!
-//! Translation strings live in the frontend (Fluent `.ftl` files) so they can be
-//! hot-reloaded and unit-tested with the UI. This crate only answers "which
-//! locale should we open with" and keeps the shipped list in one place.
+//! Translation strings live in `locales/<tag>.ftl` (Fluent `key = value` subset) and are
+//! served by [`Catalog`]. This crate also answers "which locale should we open with"
+//! and keeps the shipped list in one place.
 
 #![forbid(unsafe_code)]
+
+mod catalog;
+
+pub use catalog::Catalog;
 
 /// Locales shipped in v1.0, in display order.
 pub const SHIPPED: &[&str] = &[
