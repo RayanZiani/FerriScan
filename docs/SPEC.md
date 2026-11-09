@@ -291,17 +291,16 @@ version control and may only change with a documented ADR.
 
 | Layer | Technology | Rationale |
 | --- | --- | --- |
-| Shell | **Tauri 2.12** | Small binaries, native webview, mature Rust integration, per-platform signing/packaging. |
-| UI | **Svelte 5** + Vite 8 + TypeScript | Minimal runtime and no virtual-DOM churn; runes give fine-grained updates for huge lists. |
-| Charts | Hand-written Canvas 2D renderers (treemap, sunburst), SVG only for small legends | Predictable frame budget at 5k+ nodes. |
+| Shell + UI | **GPUI** (pinned git revision), 100 % Rust, no webview — *proposed by ADR-0005, Tauri 2.12 + Svelte 5 remains in force until spike M-G0 passes* | One language, direct access to `Arc<Snapshot>`, GPU rendering, no IPC. |
+| Charts | GPUI canvas renderers (treemap, sunburst) fed by `core::layout` arrays | Predictable frame budget at 5k+ nodes. |
 | Engine | Rust 2024 edition, one workspace | Direct OS APIs, zero-copy index, deterministic performance. |
-| IPC | Tauri commands, typed via `specta` (or hand-written mirrors validated by a contract test) | Compile-time checking of the boundary without a second server. |
-| i18n | Fluent (`.ftl`) in the frontend; stable error codes from Rust | Plural/gender correctness, no string concatenation. |
+| IPC | None under ADR-0005 (direct calls). Until cutover: Tauri commands with a contract test | Removes the serialization boundary. |
+| i18n | Fluent (`.ftl`) via `ferriscan-i18n`; stable error codes from Rust | Plural/gender correctness, no string concatenation. |
 | Storage | Plain versioned JSON in the OS config dir | Auditable, portable, no database dependency. |
 | Logging | `tracing` to a rotating local file, off by default at `info` | Diagnosable without telemetry. |
 
-See `docs/adr/0001-tauri-svelte.md` for the alternatives considered (Electron, egui, iced, Qt,
-Slint) and why they lost.
+See `docs/adr/0001-tauri-svelte.md` for the original alternatives (Electron, egui, iced, Qt,
+Slint) and `docs/adr/0005-gpui-native-ui.md` for the GPUI migration.
 
 ### 7.2 Process and data flow
 

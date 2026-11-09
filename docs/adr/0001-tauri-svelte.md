@@ -1,6 +1,6 @@
 # ADR-0001 — Tauri 2 + Svelte 5 for the desktop shell
 
-- **Status:** Accepted
+- **Status:** Accepted — proposed to be superseded by ADR-0005 (pending spike M-G0)
 - **Date:** 2026-11-04
 - **Deciders:** Core, UI
 - **Related:** SPEC §7, FILE_ARCHITECTURE §2
