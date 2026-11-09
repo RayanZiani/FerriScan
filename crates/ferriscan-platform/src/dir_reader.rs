@@ -2,7 +2,12 @@
 
 use std::path::Path;
 
-use ferriscan_core::fs::{DirReader, EntryKind, FsError, RawEntry};
+#[cfg(not(windows))]
+use ferriscan_core::fs::EntryKind;
+use ferriscan_core::fs::{DirReader, FsError, RawEntry};
+
+#[cfg(windows)]
+mod windows;
 
 /// The platform's fastest available directory reader.
 #[derive(Debug, Default, Clone, Copy)]
@@ -31,6 +36,12 @@ impl DirReader for PlatformDirReader {
 /// The Windows and Linux fast paths live in the platform modules below; the
 /// fallback keeps the crate compiling everywhere and is what macOS uses until
 /// the `getattrlistbulk` reader lands (tracked as T2.4).
+#[cfg(windows)]
+fn read_dir_impl(dir: &Path, out: &mut Vec<RawEntry>) -> Result<(), FsError> {
+    windows::read_dir(dir, out)
+}
+
+#[cfg(not(windows))]
 fn read_dir_impl(dir: &Path, out: &mut Vec<RawEntry>) -> Result<(), FsError> {
     let entries = std::fs::read_dir(dir).map_err(|e| FsError::from_io(&e, dir))?;
     for entry in entries {
@@ -75,6 +86,7 @@ fn read_dir_impl(dir: &Path, out: &mut Vec<RawEntry>) -> Result<(), FsError> {
     Ok(())
 }
 
+#[cfg(not(windows))]
 fn mtime_secs(metadata: &std::fs::Metadata) -> i64 {
     metadata
         .modified()
@@ -88,16 +100,6 @@ fn is_hidden(path: &Path, _metadata: &std::fs::Metadata) -> bool {
     // Unix has no hidden attribute: a leading dot is the only convention.
     path.file_name()
         .is_some_and(|n| n.to_string_lossy().starts_with('.'))
-}
-
-#[cfg(windows)]
-fn is_hidden(path: &Path, metadata: &std::fs::Metadata) -> bool {
-    use std::os::windows::fs::MetadataExt;
-    const FILE_ATTRIBUTE_HIDDEN: u32 = 0x2;
-    metadata.file_attributes() & FILE_ATTRIBUTE_HIDDEN != 0
-        || path
-            .file_name()
-            .is_some_and(|n| n.to_string_lossy().starts_with('.'))
 }
 
 #[cfg(unix)]
