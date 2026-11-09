@@ -1,7 +1,9 @@
 //! Application shell: toolbar, volume list, status bar (parity with `AppShell.svelte`).
 
 use std::{
+    cell::RefCell,
     path::PathBuf,
+    rc::Rc,
     sync::Arc,
     time::{Duration, Instant},
 };
@@ -15,16 +17,23 @@ use ferriscan_i18n::Catalog;
 use ferriscan_persist::{AppDirs, Settings, ThemeMode, Units, app_dirs};
 use ferriscan_platform::volumes::{Volume, VolumeKind};
 use gpui::{
-    Context, InteractiveElement, IntoElement, ParentElement, Render, StatefulInteractiveElement,
-    Styled, Window, div, px, relative, uniform_list,
+    Bounds, Context, InteractiveElement, IntoElement, ParentElement, Render,
+    StatefulInteractiveElement, Styled, Window, div, px, relative, uniform_list,
 };
 
 use gpui::prelude::FluentBuilder as _;
 
-use crate::{format, results::Results, theme::Theme};
+use crate::{format, results::Results, theme::Theme, treemap::TreemapState};
 
 /// One selectable value of a setting: label, whether it is current, how to apply it.
 type SettingChoice = (String, bool, fn(&mut Settings));
+
+/// How the results panel presents the current folder.
+#[derive(Clone, Copy, PartialEq, Eq)]
+enum ResultsMode {
+    Table,
+    Treemap,
+}
 
 /// Which main panel is visible.
 #[derive(Clone, Copy, PartialEq, Eq)]
@@ -62,6 +71,9 @@ pub struct Shell {
     next_toast: u64,
     results: Option<Results>,
     view: View,
+    mode: ResultsMode,
+    treemap: Rc<RefCell<TreemapState>>,
+    tm_hover: Option<usize>,
     dirs: AppDirs,
     progress: Arc<Progress>,
     cancel: Arc<CancelToken>,
@@ -81,6 +93,9 @@ impl Shell {
             next_toast: 0,
             results: None,
             view: View::Volumes,
+            mode: ResultsMode::Table,
+            treemap: Rc::default(),
+            tm_hover: None,
             progress: Arc::new(Progress::new()),
             cancel: Arc::new(CancelToken::new()),
         };
@@ -189,13 +204,127 @@ impl Shell {
     fn open_node(&mut self, id: NodeId, cx: &mut Context<Self>) {
         if let Some(r) = &mut self.results {
             r.open(id);
+            self.tm_hover = None;
             cx.notify();
         }
+    }
+
+    fn render_treemap(&self, th: Theme, cx: &mut Context<Self>) -> gpui::Div {
+        let Some(results) = &self.results else {
+            return div();
+        };
+        let snapshot = Arc::clone(&results.snapshot);
+        let node = results.current;
+        let state = Rc::clone(&self.treemap);
+        let hover = self.tm_hover;
+        let units = self.settings.units;
+
+        let label = hover
+            .and_then(|i| state.borrow().tiles.get(i).copied())
+            .filter(|tile| !tile.node.is_none())
+            .map(|tile| {
+                format!(
+                    "{}  {}",
+                    snapshot.store.name(tile.node),
+                    format::bytes(tile.size, units)
+                )
+            })
+            .unwrap_or_default();
+
+        let hit = |state: &Rc<RefCell<TreemapState>>, p: gpui::Point<gpui::Pixels>| {
+            let st = state.borrow();
+            let (x, y) = (
+                f32::from(p.x - st.bounds.origin.x),
+                f32::from(p.y - st.bounds.origin.y),
+            );
+            st.hit(x, y)
+        };
+        let (move_state, down_state) = (Rc::clone(&state), Rc::clone(&state));
+
+        div()
+            .flex_1()
+            .min_h_0()
+            .flex()
+            .flex_col()
+            .gap(px(4.))
+            .child(div().h(px(20.)).text_color(th.text_muted).child(label))
+            .child(
+                div()
+                    .id("treemap")
+                    .flex_1()
+                    .on_mouse_move(cx.listener(move |this, ev: &gpui::MouseMoveEvent, _, cx| {
+                        let h = hit(&move_state, ev.position);
+                        if h != this.tm_hover {
+                            this.tm_hover = h;
+                            cx.notify();
+                        }
+                    }))
+                    .on_mouse_down(
+                        gpui::MouseButton::Left,
+                        cx.listener(move |this, ev: &gpui::MouseDownEvent, _, cx| {
+                            let st = down_state.borrow();
+                            let (x, y) = (
+                                f32::from(ev.position.x - st.bounds.origin.x),
+                                f32::from(ev.position.y - st.bounds.origin.y),
+                            );
+                            let target = st.hit(x, y).and_then(|i| st.tiles.get(i).copied());
+                            drop(st);
+                            if let Some(tile) = target.filter(|t| !t.node.is_none()) {
+                                this.open_node(tile.node, cx);
+                            }
+                        }),
+                    )
+                    .child(
+                        gpui::canvas(
+                            |_, _, _| (),
+                            move |bounds, (), window, _| {
+                                let mut st = state.borrow_mut();
+                                st.bounds = bounds;
+                                st.ensure(
+                                    &snapshot,
+                                    node,
+                                    f32::from(bounds.size.width),
+                                    f32::from(bounds.size.height),
+                                );
+                                for (i, tile) in st.tiles.iter().enumerate() {
+                                    let r = tile.rect;
+                                    if r.w < 1.0 || r.h < 1.0 {
+                                        continue;
+                                    }
+                                    let color = if Some(i) == hover {
+                                        th.text
+                                    } else if tile.node.is_none() {
+                                        th.surface_3
+                                    } else {
+                                        let rec = snapshot.store.get(tile.node);
+                                        if rec.flags().is_dir() {
+                                            th.surface_3
+                                        } else {
+                                            th.chart[usize::from(rec.ext_id) % th.chart.len()]
+                                        }
+                                    };
+                                    window.paint_quad(gpui::fill(
+                                        Bounds::new(
+                                            bounds.origin + gpui::point(px(r.x), px(r.y)),
+                                            gpui::size(
+                                                px((r.w - 1.0).max(0.0)),
+                                                px((r.h - 1.0).max(0.0)),
+                                            ),
+                                        ),
+                                        color,
+                                    ));
+                                }
+                            },
+                        )
+                        .size_full(),
+                    ),
+            )
     }
 
     fn go_up(&mut self, cx: &mut Context<Self>) {
         if let Some(r) = &mut self.results {
             r.up();
+            self.tm_hover = None;
             cx.notify();
         }
     }
@@ -212,34 +341,72 @@ impl Shell {
             || (String::new(), true, 0),
             |r| (r.path().display().to_string(), r.at_root(), r.rows.len()),
         );
-        div()
+        let mode_button = |id: &'static str, label: String, target: ResultsMode| {
+            div()
+                .id(id)
+                .px(px(8.))
+                .py(px(2.))
+                .rounded(px(4.))
+                .cursor_pointer()
+                .bg(if self.mode == target {
+                    th.accent
+                } else {
+                    th.surface_3
+                })
+                .text_color(if self.mode == target {
+                    th.text_inverse
+                } else {
+                    th.text
+                })
+                .on_click(cx.listener(move |this, _, _, cx| {
+                    this.mode = target;
+                    this.tm_hover = None;
+                    cx.notify();
+                }))
+                .child(label)
+        };
+        let header = div()
+            .flex()
+            .items_center()
+            .gap(px(8.))
+            .child(
+                div()
+                    .id("up")
+                    .px(px(8.))
+                    .py(px(2.))
+                    .rounded(px(4.))
+                    .bg(th.surface_3)
+                    .when(!at_root, |d| {
+                        d.cursor_pointer()
+                            .on_click(cx.listener(|this, _, _, cx| this.go_up(cx)))
+                    })
+                    .when(at_root, |d| d.opacity(0.4))
+                    .child(t("table.up")),
+            )
+            .child(path)
+            .child(div().flex_1())
+            .child(mode_button(
+                "mode-table",
+                t("view.table"),
+                ResultsMode::Table,
+            ))
+            .child(mode_button(
+                "mode-treemap",
+                t("view.treemap"),
+                ResultsMode::Treemap,
+            ));
+        let frame = div()
             .flex_1()
             .min_h_0()
             .flex()
             .flex_col()
             .p(px(16.))
             .gap(px(8.))
-            .child(
-                div()
-                    .flex()
-                    .items_center()
-                    .gap(px(8.))
-                    .child(
-                        div()
-                            .id("up")
-                            .px(px(8.))
-                            .py(px(2.))
-                            .rounded(px(4.))
-                            .bg(th.surface_3)
-                            .when(!at_root, |d| {
-                                d.cursor_pointer()
-                                    .on_click(cx.listener(|this, _, _, cx| this.go_up(cx)))
-                            })
-                            .when(at_root, |d| d.opacity(0.4))
-                            .child(t("table.up")),
-                    )
-                    .child(path),
-            )
+            .child(header);
+        if self.mode == ResultsMode::Treemap {
+            return frame.child(self.render_treemap(th, cx));
+        }
+        frame
             .child(
                 div()
                     .flex()

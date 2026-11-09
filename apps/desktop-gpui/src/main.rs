@@ -4,6 +4,7 @@ mod format;
 mod results;
 mod shell;
 mod theme;
+mod treemap;
 
 use gpui::{App, AppContext, WindowOptions};
 
