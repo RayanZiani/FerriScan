@@ -1,6 +1,7 @@
 //! FerriScan native shell (ADR-0005, GPUI).
 
 mod format;
+mod results;
 mod shell;
 mod theme;
 

@@ -7,6 +7,7 @@ use std::{
 };
 
 use ferriscan_core::{
+    model::NodeId,
     model::{Snapshot, SnapshotStatus},
     scan::{ScanOptions, controller::CancelToken, progress::Progress, scan},
 };
@@ -15,12 +16,12 @@ use ferriscan_persist::{Settings, app_dirs};
 use ferriscan_platform::volumes::{Volume, VolumeKind};
 use gpui::{
     Context, InteractiveElement, IntoElement, ParentElement, Render, StatefulInteractiveElement,
-    Styled, Window, div, px, relative,
+    Styled, Window, div, px, relative, uniform_list,
 };
 
 use gpui::prelude::FluentBuilder as _;
 
-use crate::{format, theme::Theme};
+use crate::{format, results::Results, theme::Theme};
 
 /// What the status bar shows about the scan.
 enum ScanUi {
@@ -48,6 +49,8 @@ pub struct Shell {
     scan: ScanUi,
     toasts: Vec<Toast>,
     next_toast: u64,
+    results: Option<Results>,
+    show_results: bool,
     progress: Arc<Progress>,
     cancel: Arc<CancelToken>,
 }
@@ -63,6 +66,8 @@ impl Shell {
             scan: ScanUi::Idle,
             toasts: Vec::new(),
             next_toast: 0,
+            results: None,
+            show_results: false,
             progress: Arc::new(Progress::new()),
             cancel: Arc::new(CancelToken::new()),
         };
@@ -139,7 +144,14 @@ impl Shell {
                     Err(e) => (format!("{}: {e}", this.catalog.t("scan.failed")), true),
                 };
                 this.scan = match result {
-                    Ok(snapshot) => ScanUi::Done(Arc::new(snapshot)),
+                    Ok(snapshot) => {
+                        let snapshot = Arc::new(snapshot);
+                        if snapshot.status != SnapshotStatus::Cancelled {
+                            this.results = Some(Results::new(Arc::clone(&snapshot)));
+                            this.show_results = true;
+                        }
+                        ScanUi::Done(snapshot)
+                    }
                     Err(err) => ScanUi::Failed(err.to_string()),
                 };
                 this.push_toast(text, error, cx);
@@ -159,6 +171,138 @@ impl Shell {
             let _ = this.update(cx, |this, cx| this.dismiss_toast(id, cx));
         })
         .detach();
+    }
+
+    fn open_node(&mut self, id: NodeId, cx: &mut Context<Self>) {
+        if let Some(r) = &mut self.results {
+            r.open(id);
+            cx.notify();
+        }
+    }
+
+    fn go_up(&mut self, cx: &mut Context<Self>) {
+        if let Some(r) = &mut self.results {
+            r.up();
+            cx.notify();
+        }
+    }
+
+    fn render_results(&self, th: Theme, cx: &mut Context<Self>) -> impl IntoElement {
+        let units = self.settings.units;
+        let row_h = if self.settings.compact_density {
+            px(24.)
+        } else {
+            px(30.)
+        };
+        let t = |key: &str| self.catalog.t(key).to_string();
+        let (path, at_root, count) = self.results.as_ref().map_or_else(
+            || (String::new(), true, 0),
+            |r| (r.path().display().to_string(), r.at_root(), r.rows.len()),
+        );
+        div()
+            .flex_1()
+            .min_h_0()
+            .flex()
+            .flex_col()
+            .p(px(16.))
+            .gap(px(8.))
+            .child(
+                div()
+                    .flex()
+                    .items_center()
+                    .gap(px(8.))
+                    .child(
+                        div()
+                            .id("up")
+                            .px(px(8.))
+                            .py(px(2.))
+                            .rounded(px(4.))
+                            .bg(th.surface_3)
+                            .when(!at_root, |d| {
+                                d.cursor_pointer()
+                                    .on_click(cx.listener(|this, _, _, cx| this.go_up(cx)))
+                            })
+                            .when(at_root, |d| d.opacity(0.4))
+                            .child(t("table.up")),
+                    )
+                    .child(path),
+            )
+            .child(
+                div()
+                    .flex()
+                    .px(px(8.))
+                    .text_color(th.text_muted)
+                    .child(div().flex_1().child(t("table.name")))
+                    .child(div().w(px(100.)).child(t("table.size")))
+                    .child(div().w(px(160.)).child(""))
+                    .child(div().w(px(80.)).child(t("table.items"))),
+            )
+            .when(count == 0, |d| {
+                d.child(div().text_color(th.text_muted).child(t("table.empty")))
+            })
+            .child(
+                uniform_list(
+                    "rows",
+                    count,
+                    cx.processor(move |this, range: std::ops::Range<usize>, _, cx| {
+                        let Some(r) = &this.results else {
+                            return Vec::new();
+                        };
+                        let store = &r.snapshot.store;
+                        let total = store.get(r.current).size.max(1);
+                        range
+                            .filter_map(|i| r.rows.get(i).copied())
+                            .map(|id| {
+                                let rec = store.get(id);
+                                let is_dir = rec.flags().is_dir();
+                                let frac = rec.size as f32 / total as f32;
+                                div()
+                                    .id(("row", id.raw() as usize))
+                                    .flex()
+                                    .items_center()
+                                    .h(row_h)
+                                    .px(px(8.))
+                                    .rounded(px(4.))
+                                    .when(is_dir, |d| {
+                                        d.cursor_pointer().hover(|d| d.bg(th.surface_2)).on_click(
+                                            cx.listener(move |this, _, _, cx| {
+                                                this.open_node(id, cx);
+                                            }),
+                                        )
+                                    })
+                                    .child(div().flex_1().child(format!(
+                                        "{}{}",
+                                        if is_dir { "\u{25B8} " } else { "" },
+                                        store.name(id)
+                                    )))
+                                    .child(div().w(px(100.)).child(format::bytes(rec.size, units)))
+                                    .child(
+                                        div().w(px(160.)).pr(px(12.)).child(
+                                            div()
+                                                .h(px(6.))
+                                                .w_full()
+                                                .rounded(px(3.))
+                                                .bg(th.surface_3)
+                                                .child(
+                                                    div()
+                                                        .h_full()
+                                                        .w(relative(frac.clamp(0.0, 1.0)))
+                                                        .rounded(px(3.))
+                                                        .bg(th.accent),
+                                                ),
+                                        ),
+                                    )
+                                    .child(div().w(px(80.)).child(if is_dir {
+                                        rec.child_count.to_string()
+                                    } else {
+                                        String::new()
+                                    }))
+                            })
+                            .collect()
+                    }),
+                )
+                .flex_1(),
+            )
     }
 
     fn dismiss_toast(&mut self, id: u64, cx: &mut Context<Self>) {
@@ -310,6 +454,7 @@ impl Render for Shell {
 
         let status = self.status_text();
         let running = matches!(self.scan, ScanUi::Running { .. });
+        let show_results = self.show_results && self.results.is_some();
         let toasts: Vec<_> = self
             .toasts
             .iter()
@@ -347,6 +492,39 @@ impl Render for Shell {
                     .border_b_1()
                     .border_color(th.border)
                     .child(t("app.name"))
+                    .when(self.results.is_some(), |d| {
+                        let tab = |id: &'static str, label: String, active: bool, results: bool| {
+                            div()
+                                .id(id)
+                                .px(px(10.))
+                                .py(px(2.))
+                                .rounded(px(4.))
+                                .cursor_pointer()
+                                .when(active, |d| d.bg(th.surface_3))
+                                .on_click(cx.listener(move |this, _, _, cx| {
+                                    this.show_results = results;
+                                    cx.notify();
+                                }))
+                                .child(label)
+                        };
+                        d.child(
+                            div()
+                                .flex()
+                                .gap(px(4.))
+                                .child(tab(
+                                    "tab-volumes",
+                                    t("nav.volumes"),
+                                    !self.show_results,
+                                    false,
+                                ))
+                                .child(tab(
+                                    "tab-results",
+                                    t("nav.results"),
+                                    self.show_results,
+                                    true,
+                                )),
+                        )
+                    })
                     .child(
                         div()
                             .id("refresh")
@@ -360,7 +538,9 @@ impl Render for Shell {
                             .child(t("volumes.refresh")),
                     ),
             )
-            .child(
+            .child(if show_results {
+                self.render_results(th, cx).into_any_element()
+            } else {
                 div()
                     .id("volumes")
                     .flex_1()
@@ -376,8 +556,9 @@ impl Render for Shell {
                     .when(self.loading && self.volumes.is_empty(), |d| {
                         d.child(t("common.loading"))
                     })
-                    .children(rows),
-            )
+                    .children(rows)
+                    .into_any_element()
+            })
             .child(
                 div()
                     .px(px(16.))
