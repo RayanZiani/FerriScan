@@ -237,6 +237,22 @@ impl Shell {
         .detach();
     }
 
+    /// Keeps the latest window rectangle in memory; it is written once, when the window closes.
+    pub fn remember_bounds(&mut self, bounds: gpui::Bounds<gpui::Pixels>) {
+        let whole = |v: gpui::Pixels| f32::from(v).round() as i32;
+        self.settings.window_geometry = Some((
+            whole(bounds.origin.x),
+            whole(bounds.origin.y),
+            u32::try_from(whole(bounds.size.width)).unwrap_or(0),
+            u32::try_from(whole(bounds.size.height)).unwrap_or(0),
+        ));
+    }
+
+    /// Writes settings (including the window rectangle); failure is not worth interrupting a close.
+    pub fn save_settings(&self) {
+        let _ = self.settings.save(&self.dirs.settings_file());
+    }
+
     /// Starts an elevated copy of the app after the OS consent prompt, then quits this one.
     fn relaunch_elevated(&mut self, cx: &mut Context<Self>) {
         if ferriscan_platform::elevation::relaunch_elevated().is_ok() {
