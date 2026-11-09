@@ -50,7 +50,7 @@ jobs:
             \( -name 'ferriscan-app*' -o -name 'ferriscan' -o -name 'ferriscan.exe' \) \
             ! -name '*.d' ! -name '*.pdb' -exec cp {} dist/ \;
           cd dist && sha256sum * > SHA256SUMS.txt
-      - uses: actions/upload-artifact@v4
+      - uses: actions/upload-artifact@v7
         with:
           name: ferriscan-${{ matrix.target }}
           path: dist/*
