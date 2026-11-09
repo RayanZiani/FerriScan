@@ -14,6 +14,8 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 - Engineering agent setup and project conventions.
 - Native GPUI desktop app: volume list, fast scan with progress and cancel, size table, treemap, selection actions (open, show in folder, copy path, move to recycle bin), settings, toasts (ADR-0005).
 - Windows bulk directory reader (about 7x faster scans) and recycle-bin / open-path shell calls.
+- Opt-in NTFS MFT fast scan (ADR-0006): relaunch as administrator, then whole-drive scans read the MFT (about 6 s for 2.8M entries on `C:\` versus 15-40 s for the directory walk). `ferriscan scan <path> --mft` in an elevated terminal does the same.
+- Versioning: `cargo xtask bump [patch|minor|major]` and `cargo xtask build` (patch bump per build).
 - Rust message catalog (`ferriscan-i18n`) with English strings.
 
 ### Changed
