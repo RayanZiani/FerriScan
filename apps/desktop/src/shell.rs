@@ -835,6 +835,27 @@ impl Shell {
                 ],
             ))
             .child(group(
+                "threads",
+                t("settings.threads"),
+                vec![
+                    (t("settings.threads_auto"), s.threads == 0, |s| {
+                        s.threads = 0;
+                    }),
+                    ("2".into(), s.threads == 2, |s| {
+                        s.threads = 2;
+                    }),
+                    ("4".into(), s.threads == 4, |s| {
+                        s.threads = 4;
+                    }),
+                    ("8".into(), s.threads == 8, |s| {
+                        s.threads = 8;
+                    }),
+                    ("16".into(), s.threads == 16, |s| {
+                        s.threads = 16;
+                    }),
+                ],
+            ))
+            .child(group(
                 "units",
                 t("settings.units"),
                 vec![

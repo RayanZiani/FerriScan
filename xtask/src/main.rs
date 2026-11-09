@@ -172,7 +172,9 @@ fn run() -> Result<(), String> {
         }
         Some("i18n-check") => i18n_check()?,
         _ => {
-            return Err("usage: cargo xtask <bump [patch|minor|major] | build | i18n-check>".into());
+            return Err(
+                "usage: cargo xtask <bump [patch|minor|major] | build | i18n-check>".into(),
+            );
         }
     }
     Ok(())
