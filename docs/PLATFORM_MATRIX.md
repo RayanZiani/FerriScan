@@ -25,9 +25,11 @@ Fill the "Verified" column with the build SHA during M9 and remove `T` markers.
 | --- | --- | --- | --- | --- |
 | Enumerate volumes | `GetLogicalDriveStringsW` | `/proc/self/mountinfo` | `getmntinfo` | |
 | Free space | `GetDiskFreeSpaceExW` | `statvfs` | `statfs` | |
-| Fast directory read | `FindFirstFileExW` + `LARGE_FETCH` | `getdents64` + `statx` | `getattrlistbulk` | |
+| Fast directory read | `GetFileInformationByHandleEx` + `FILE_FULL_DIR_INFO` (64 KiB batches, implemented) | `getdents64` + `statx` | `getattrlistbulk` | |
 | Logical size | `WIN32_FIND_DATAW.nFileSize` | `statx.stx_size` | `ATTR_FILE_DATALENGTH` | |
-| Allocated size | rounded to cluster size from volume info | `statx.stx_blocks * 512` | `ATTR_FILE_ALLOCSIZE` | Windows value is an estimate from cluster size; documented in the UI |
+| Allocated size | `FILE_FULL_DIR_INFO.AllocationSize` (exact, implemented) | `statx.stx_blocks * 512` | `ATTR_FILE_ALLOCSIZE` |  |
+| Move to trash | `SHFileOperationW` (`FOF_ALLOWUNDO`, implemented) | not implemented | not implemented | Returns Unsupported off Windows |
+| Open / show in folder | `ShellExecuteW` (implemented) | not implemented | not implemented | No child process spawned |
 | Hidden/system flags | `FILE_ATTRIBUTE_*` | dotfile heuristic | `UF_HIDDEN` / dotfile | Linux has no true hidden bit |
 | Symlink target size | `GetFinalPathNameByHandle` optional | `readlink` | `readlink` | Target not followed by default |
 | Hardlink detection | file ID via handle (opt-in) | `(dev, ino)` always | `(dev, fileid)` always | |
