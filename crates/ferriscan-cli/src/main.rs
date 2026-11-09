@@ -110,7 +110,7 @@ fn run_scan(args: &[String]) -> ExitCode {
         .children(snapshot.root)
         .map(|id| (id, snapshot.store.get(id).allocated))
         .collect();
-    children.sort_by(|a, b| b.1.cmp(&a.1));
+    children.sort_by_key(|a| std::cmp::Reverse(a.1));
 
     println!("\ntop {top}:");
     for (id, size) in children.into_iter().take(top) {

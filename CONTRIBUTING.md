@@ -5,7 +5,7 @@ version; `AGENTS.md` holds the full engineering rules and applies to humans and 
 
 ## Setup
 
-Prerequisites: Rust stable 1.90+ (pinned by `rust-toolchain.toml`), Node.js 22+, and platform WebView dependencies.
+Prerequisites: Rust stable 1.98+ (pinned by `rust-toolchain.toml`), Node.js 22+, and platform WebView dependencies.
 
 | OS | Extra packages |
 | --- | --- |
