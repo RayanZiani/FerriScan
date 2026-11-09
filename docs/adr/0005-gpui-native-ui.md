@@ -141,6 +141,24 @@ spike fixes the real constraints.
 - GPUI shell: Scan button per volume, background scan, 10 Hz progress and summary in the status
   bar, Cancel. Verified by build/launch only; the click path is not covered by automated tests.
 
+### Scan speed, whole system drive (2026-11-09, correction)
+
+The extrapolation above was optimistic. Measured on `C:\` (2.77M entries, 435k directories,
+22 logical CPUs), release CLI:
+
+- 40 s cold cache, 15-20 s warm. Threads: 4 -> 31 s, 8 -> 19 s, 16 -> 16 s, 32 -> 16 s.
+- CPU time is 94 % kernel (159 s kernel vs 10 s user): user-space work (inserts, globs) is
+  not the bottleneck. The node-store lock is held ~6 s in total.
+- About half of the thread time is `CreateFileW` on directories (~65 us single-threaded,
+  ~300 us under 16-thread contention), the rest is enumeration.
+- Opening relative to the parent handle (`NtCreateFile` with `RootDirectory`) was measured
+  at 65 us vs 67 us: no gain, so path resolution is not the cost.
+
+Conclusion: a non-elevated directory walk is bounded around 150-200k entries/s here. The
+15 s per TB figure that TreeSize reaches comes from reading the NTFS MFT, which requires an
+elevated volume handle. That conflicts with the "no elevation in v1.0" rule of the SPEC and
+is left as a decision for the maintainers.
+
 ## Cutover (M-G4, 2026-11-09)
 
 - Removed: `apps/desktop` (Tauri shell, Svelte frontend, npm tooling), Node scripts, CI frontend
