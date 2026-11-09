@@ -16,6 +16,8 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 - Windows bulk directory reader (about 7x faster scans) and recycle-bin / open-path shell calls.
 - Opt-in NTFS MFT fast scan (ADR-0006): relaunch as administrator, then whole-drive scans read the MFT (about 6 s for 2.8M entries on `C:\` versus 15-40 s for the directory walk). `ferriscan scan <path> --mft` in an elevated terminal does the same.
 - Versioning: `cargo xtask bump [patch|minor|major]` and `cargo xtask build` (patch bump per build).
+- High-contrast theme (every pair at least 7:1, covered by a test), window rectangle restored between runs, scan thread count in settings, Windows executable icon.
+- `cargo xtask i18n-check` (locale completeness, placeholder parity, unknown keys), enforced in CI.
 - Rust message catalog (`ferriscan-i18n`) with English strings.
 
 ### Changed
