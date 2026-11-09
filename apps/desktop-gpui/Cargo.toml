@@ -1,0 +1,18 @@
+# Spike M-G0 (ADR-0005). Standalone workspace so GPUI's heavy build never slows
+# `cargo test --workspace` on the main workspace.
+[workspace]
+
+[package]
+name = "ferriscan-gpui"
+version = "0.1.0"
+edition = "2024"
+license = "MIT"
+publish = false
+
+[dependencies]
+ferriscan-platform = { path = "../../crates/ferriscan-platform" }
+ferriscan-core = { path = "../../crates/ferriscan-core" }
+ferriscan-persist = { path = "../../crates/ferriscan-persist" }
+ferriscan-i18n = { path = "../../crates/ferriscan-i18n" }
+gpui = { git = "https://github.com/zed-industries/zed", rev = "ddb90e5e89d346f21847281727e1644b8bb2cc37" }
+gpui_platform = { git = "https://github.com/zed-industries/zed", rev = "ddb90e5e89d346f21847281727e1644b8bb2cc37" }
