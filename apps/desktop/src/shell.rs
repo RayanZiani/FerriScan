@@ -87,6 +87,7 @@ pub struct Shell {
     treemap: Rc<RefCell<TreemapState>>,
     tm_hover: Option<usize>,
     dirs: AppDirs,
+    elevated: bool,
     progress: Arc<Progress>,
     cancel: Arc<CancelToken>,
 }
@@ -110,6 +111,7 @@ impl Shell {
             mode: ResultsMode::Table,
             treemap: Rc::default(),
             tm_hover: None,
+            elevated: ferriscan_platform::elevation::is_elevated(),
             progress: Arc::new(Progress::new()),
             cancel: Arc::new(CancelToken::new()),
         };
@@ -160,9 +162,31 @@ impl Shell {
             ..ScanOptions::default()
         };
         let (progress, cancel) = (Arc::clone(&self.progress), Arc::clone(&self.cancel));
+        let elevated = self.elevated;
         let task = cx.background_executor().spawn(async move {
-            let reader = ferriscan_platform::PlatformDirReader::new();
-            scan(&reader, &root, &options, &progress, &cancel)
+            // The MFT reader needs an elevated process and a whole-drive root; any failure
+            // falls back to the directory walk (ADR-0006).
+            #[cfg(windows)]
+            let mft = elevated
+                .then(|| ferriscan_platform::mft::MftReader::try_open(&root))
+                .flatten();
+            #[cfg(not(windows))]
+            let mft: Option<ferriscan_platform::PlatformDirReader> = {
+                let _ = elevated;
+                None
+            };
+            let fast = mft.is_some();
+            let result = match &mft {
+                Some(reader) => scan(reader, &root, &options, &progress, &cancel),
+                None => scan(
+                    &ferriscan_platform::PlatformDirReader::new(),
+                    &root,
+                    &options,
+                    &progress,
+                    &cancel,
+                ),
+            };
+            (result, fast)
         });
         cx.spawn(async move |this, cx| {
             let ticker = cx.spawn({
@@ -175,14 +199,23 @@ impl Shell {
                     }
                 }
             });
-            let result = task.await;
+            let (result, fast) = task.await;
             drop(ticker);
             let _ = this.update(cx, |this, cx| {
                 let (text, error) = match &result {
                     Ok(s) if s.status == SnapshotStatus::Cancelled => {
                         (this.catalog.t("scan.cancelled").to_string(), false)
                     }
-                    Ok(_) => (this.catalog.t("scan.ready").to_string(), false),
+                    Ok(_) => (
+                        this.catalog
+                            .t(if fast {
+                                "scan.ready_fast"
+                            } else {
+                                "scan.ready"
+                            })
+                            .to_string(),
+                        false,
+                    ),
                     Err(e) => (format!("{}: {e}", this.catalog.t("scan.failed")), true),
                 };
                 this.scan = match result {
@@ -202,6 +235,16 @@ impl Shell {
             });
         })
         .detach();
+    }
+
+    /// Starts an elevated copy of the app after the OS consent prompt, then quits this one.
+    fn relaunch_elevated(&mut self, cx: &mut Context<Self>) {
+        if ferriscan_platform::elevation::relaunch_elevated().is_ok() {
+            cx.quit();
+        } else {
+            let text = self.catalog.t("volumes.relaunch_failed").to_string();
+            self.push_toast(text, true, cx);
+        }
     }
 
     /// Shows `text` for [`TOAST_LIFETIME`]; the timer is dropped with the view.
@@ -1036,6 +1079,35 @@ impl Render for Shell {
                     .flex_col()
                     .gap(px(8.))
                     .child(div().child(t("volumes.title")))
+                    .when(cfg!(windows), |d| {
+                        d.child(if self.elevated {
+                            div().text_color(th.text_muted).child(t("volumes.fast_on"))
+                        } else {
+                            div()
+                                .flex()
+                                .gap(px(12.))
+                                .items_center()
+                                .child(
+                                    div()
+                                        .text_color(th.text_muted)
+                                        .child(t("volumes.fast_hint")),
+                                )
+                                .child(
+                                    div()
+                                        .id("relaunch")
+                                        .px(px(10.))
+                                        .py(px(2.))
+                                        .rounded(px(4.))
+                                        .bg(th.accent)
+                                        .text_color(th.text_inverse)
+                                        .cursor_pointer()
+                                        .on_click(cx.listener(|this, _, _, cx| {
+                                            this.relaunch_elevated(cx);
+                                        }))
+                                        .child(t("volumes.relaunch")),
+                                )
+                        })
+                    })
                     .when(self.volumes.is_empty() && !self.loading, |d| {
                         d.child(div().text_color(th.text_muted).child(t("volumes.empty")))
                     })
