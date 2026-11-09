@@ -13,31 +13,9 @@ lcov.info
 criterion/
 
 # ---------------------------------------------------------------------------
-# Node / frontend
-# ---------------------------------------------------------------------------
-node_modules/
-dist/
-build/
-.vite/
-.turbo/
-*.tsbuildinfo
-.eslintcache
-.vitest/
-coverage-frontend/
-
-# ---------------------------------------------------------------------------
-# Tauri
-# ---------------------------------------------------------------------------
-apps/desktop/src-tauri/gen/
-apps/desktop/src-tauri/target/
-apps/desktop/src-tauri/icons/*.tmp
-
-# ---------------------------------------------------------------------------
 # Tests, fixtures, benchmarks
 # ---------------------------------------------------------------------------
 test-results/
-playwright-report/
-blob-report/
 *.snap.new
 fixtures/generated/
 bench/out/
@@ -47,8 +25,6 @@ xtask/out/
 # Logs and local build output
 # ---------------------------------------------------------------------------
 *.log
-npm-debug.log*
-yarn-error.log*
 
 # ---------------------------------------------------------------------------
 # Local runtime data (never commit scan results or user paths)

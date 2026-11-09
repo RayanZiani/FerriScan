@@ -1,5 +1,4 @@
 [workspace]
-exclude = ["apps/desktop-gpui"]
 resolver = "3"
 members = [
   "crates/ferriscan-core",
@@ -8,7 +7,7 @@ members = [
   "crates/ferriscan-persist",
   "crates/ferriscan-i18n",
   "crates/ferriscan-cli",
-  "apps/desktop/src-tauri",
+  "apps/desktop",
   "xtask",
 ]
 

@@ -1,4 +1,7 @@
-//! Design tokens (mirrors `apps/desktop/src/app.css`) resolved to GPUI colors.
+//! Design tokens (ported from the former `app.css`) resolved to GPUI colors.
+
+// Colors are written as CSS hex so they can be compared with design tools at a glance.
+#![allow(clippy::unreadable_literal)]
 
 use ferriscan_persist::ThemeMode;
 use gpui::{Rgba, WindowAppearance};
