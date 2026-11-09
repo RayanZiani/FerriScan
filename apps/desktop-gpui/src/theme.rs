@@ -16,6 +16,8 @@ pub struct Theme {
     pub text_inverse: Rgba,
     pub accent: Rgba,
     pub danger: Rgba,
+    /// Categorical colors for file families (12 hues).
+    pub chart: [Rgba; 12],
 }
 
 impl Theme {
@@ -30,6 +32,20 @@ impl Theme {
         text_inverse: hex(0xffffff),
         accent: hex(0x2563eb),
         danger: hex(0xd92d20),
+        chart: [
+            hex(0x2563eb),
+            hex(0x7c3aed),
+            hex(0xdb2777),
+            hex(0xea580c),
+            hex(0xca8a04),
+            hex(0x16a34a),
+            hex(0x0891b2),
+            hex(0x4f46e5),
+            hex(0xbe123c),
+            hex(0x65a30d),
+            hex(0x0d9488),
+            hex(0x9333ea),
+        ],
     };
 
     const DARK: Self = Self {
@@ -43,6 +59,20 @@ impl Theme {
         text_inverse: hex(0x0f1115),
         accent: hex(0x5b8cff),
         danger: hex(0xff6b5e),
+        chart: [
+            hex(0x5b8cff),
+            hex(0xa78bfa),
+            hex(0xf472b6),
+            hex(0xfb923c),
+            hex(0xfacc15),
+            hex(0x4ade80),
+            hex(0x22d3ee),
+            hex(0x818cf8),
+            hex(0xfb7185),
+            hex(0xa3e635),
+            hex(0x2dd4bf),
+            hex(0xc084fc),
+        ],
     };
 
     /// Picks the palette for the user's preference and the window's OS appearance.
