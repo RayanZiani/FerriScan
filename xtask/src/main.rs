@@ -1,7 +1,13 @@
 //! Developer tasks. `cargo xtask bump [patch|minor|major]` edits the workspace version;
-//! `cargo xtask build` bumps the patch number, then builds the release app.
+//! `cargo xtask build` bumps the patch number, then builds the release app;
+//! `cargo xtask i18n-check` verifies message keys used in code against the locale files.
 
-use std::{env, fs, process::Command};
+use std::{
+    collections::{BTreeMap, BTreeSet},
+    env, fs,
+    path::{Path, PathBuf},
+    process::Command,
+};
 
 const MANIFEST: &str = "Cargo.toml";
 
@@ -41,6 +47,114 @@ fn bump_manifest(part: &str) -> Result<String, String> {
     Ok(new)
 }
 
+const LOCALES: &str = "crates/ferriscan-i18n/locales";
+const SOURCES: [&str; 2] = ["apps/desktop/src", "crates/ferriscan-i18n/src"];
+
+/// `key -> placeholders` for one `.ftl` file (`key = value`, `{name}` placeholders).
+fn parse_ftl(text: &str) -> BTreeMap<String, BTreeSet<String>> {
+    let mut out = BTreeMap::new();
+    for line in text.lines().filter(|l| !l.trim_start().starts_with('#')) {
+        let Some((key, value)) = line.split_once(" = ") else {
+            continue;
+        };
+        let mut holders = BTreeSet::new();
+        let mut rest = value;
+        while let Some(open) = rest.find('{') {
+            let Some(close) = rest[open..].find('}') else {
+                break;
+            };
+            holders.insert(rest[open + 1..open + close].trim().to_string());
+            rest = &rest[open + close + 1..];
+        }
+        out.insert(key.trim().to_string(), holders);
+    }
+    out
+}
+
+/// String literals that look like message keys (`area.name`, lowercase, dots and underscores).
+fn literal_keys(source: &str) -> Vec<String> {
+    let mut keys = Vec::new();
+    for piece in source.split('"').skip(1).step_by(2) {
+        let looks_like_key = piece.contains('.')
+            && !piece.starts_with('.')
+            && !piece.ends_with('.')
+            && piece
+                .bytes()
+                .all(|b| b.is_ascii_lowercase() || b.is_ascii_digit() || b == b'.' || b == b'_');
+        if looks_like_key {
+            keys.push(piece.to_string());
+        }
+    }
+    keys
+}
+
+fn rust_files(dir: &Path, out: &mut Vec<PathBuf>) {
+    let Ok(entries) = fs::read_dir(dir) else {
+        return;
+    };
+    for entry in entries.flatten() {
+        let path = entry.path();
+        if path.is_dir() {
+            rust_files(&path, out);
+        } else if path.extension().is_some_and(|e| e == "rs") {
+            out.push(path);
+        }
+    }
+}
+
+/// Every non-English locale must have the English keys and the same placeholders, and every key
+/// written as a literal in the UI code must exist in English.
+fn i18n_check() -> Result<(), String> {
+    let read = |p: &Path| fs::read_to_string(p).map_err(|e| format!("{}: {e}", p.display()));
+    let en = parse_ftl(&read(&Path::new(LOCALES).join("en.ftl"))?);
+    let mut problems = Vec::new();
+
+    for entry in fs::read_dir(LOCALES).map_err(|e| e.to_string())?.flatten() {
+        let path = entry.path();
+        if path.extension().is_none_or(|e| e != "ftl") || path.ends_with("en.ftl") {
+            continue;
+        }
+        let other = parse_ftl(&read(&path)?);
+        for (key, holders) in &en {
+            match other.get(key) {
+                None => problems.push(format!("{}: missing key `{key}`", path.display())),
+                Some(h) if h != holders => {
+                    problems.push(format!(
+                        "{}: placeholders differ for `{key}`",
+                        path.display()
+                    ));
+                }
+                Some(_) => {}
+            }
+        }
+    }
+
+    let mut files = Vec::new();
+    for dir in SOURCES {
+        rust_files(Path::new(dir), &mut files);
+    }
+    for file in files {
+        for key in literal_keys(&read(&file)?) {
+            // Only report keys of areas the catalog owns.
+            let area = key.split('.').next().unwrap_or("");
+            let known_area = en.keys().any(|k| k.split('.').next() == Some(area));
+            if known_area && !en.contains_key(&key) {
+                problems.push(format!("{}: unknown key `{key}`", file.display()));
+            }
+        }
+    }
+
+    if problems.is_empty() {
+        println!("i18n-check: {} keys, ok", en.len());
+        Ok(())
+    } else {
+        Err(problems.join(
+            "
+",
+        ))
+    }
+}
+
 fn run() -> Result<(), String> {
     let mut args = env::args().skip(1);
     match args.next().as_deref() {
@@ -56,7 +170,10 @@ fn run() -> Result<(), String> {
                 return Err("build failed (version already bumped)".into());
             }
         }
-        _ => return Err("usage: cargo xtask <bump [patch|minor|major] | build>".into()),
+        Some("i18n-check") => i18n_check()?,
+        _ => {
+            return Err("usage: cargo xtask <bump [patch|minor|major] | build | i18n-check>".into());
+        }
     }
     Ok(())
 }
@@ -70,7 +187,20 @@ fn main() {
 
 #[cfg(test)]
 mod tests {
-    use super::bump;
+    use super::{bump, literal_keys, parse_ftl};
+
+    #[test]
+    fn ftl_placeholders_and_literal_keys_are_found() {
+        let ftl = parse_ftl(
+            "# c
+a.b = {x} of {y}
+c.d = plain
+",
+        );
+        assert_eq!(ftl["a.b"].len(), 2);
+        assert!(ftl["c.d"].is_empty());
+        assert_eq!(literal_keys(r#"t("a.b"); "Not.key"; "x""#), ["a.b"]);
+    }
 
     #[test]
     fn bumps_reset_lower_parts() {

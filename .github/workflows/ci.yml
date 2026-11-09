@@ -57,4 +57,3 @@ jobs:
           RUSTFLAGS: "" # keep -D warnings for lint only
       - name: i18n check
         run: cargo xtask i18n-check
-        continue-on-error: true # remove once xtask implements it

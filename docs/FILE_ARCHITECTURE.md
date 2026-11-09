@@ -318,7 +318,7 @@ Subcommands (no external task runner):
 
 | Command | Purpose |
 | --- | --- |
-| `cargo xtask i18n-check` | Missing keys, placeholder mismatches, literal UI strings (not implemented yet) |
+| `cargo xtask i18n-check` | Missing keys, placeholder mismatches, literal UI strings |
 | `cargo xtask budget` | Compare latest Criterion output against `bench/budgets.toml` |
 | `cargo xtask fixtures --size 1m` | Generate synthetic trees for benches/E2E |
 | `cargo xtask release --target <triple>` | Build, sign hooks, checksum, changelog slice |
