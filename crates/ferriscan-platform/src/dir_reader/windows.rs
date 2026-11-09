@@ -132,6 +132,7 @@ fn entry(info: &FILE_FULL_DIR_INFO, name: &[u16]) -> RawEntry {
         name: name.into_boxed_str(),
         kind,
         shared: false,
+        key: 0,
     }
 }
 

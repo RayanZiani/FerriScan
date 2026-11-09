@@ -41,6 +41,9 @@ pub struct RawEntry {
     pub system: bool,
     /// Whether the entry is a hard link already counted elsewhere.
     pub shared: bool,
+    /// Opaque token the reader can use to find this directory again (see
+    /// [`DirReader::read_dir_keyed`]); `0` when the reader resolves by path.
+    pub key: u64,
 }
 
 impl RawEntry {
@@ -57,6 +60,7 @@ impl RawEntry {
             readonly: false,
             system: false,
             shared: false,
+            key: 0,
         }
     }
 
@@ -73,6 +77,7 @@ impl RawEntry {
             readonly: false,
             system: false,
             shared: false,
+            key: 0,
         }
     }
 
@@ -89,6 +94,7 @@ impl RawEntry {
             readonly: false,
             system: false,
             shared: false,
+            key: 0,
         }
     }
 }
@@ -150,6 +156,24 @@ impl FsError {
 pub trait DirReader: Send + Sync {
     /// Reads `dir` and appends its direct entries to `out`.
     fn read_dir(&self, dir: &Path, out: &mut Vec<RawEntry>) -> Result<(), FsError>;
+
+    /// Reads a directory the reader can address without resolving `dir`.
+    ///
+    /// `key` is the token returned in [`RawEntry::key`] (or by [`Self::root_key`]). Readers that
+    /// index a whole volume up front use it to skip path resolution; the default ignores it.
+    fn read_dir_keyed(
+        &self,
+        dir: &Path,
+        _key: u64,
+        out: &mut Vec<RawEntry>,
+    ) -> Result<(), FsError> {
+        self.read_dir(dir, out)
+    }
+
+    /// Token for the scan root, passed to [`Self::read_dir_keyed`]. `0` by default.
+    fn root_key(&self, _root: &Path) -> u64 {
+        0
+    }
 
     /// Stable identifier for the filesystem holding `path`, used to stop a scan
     /// at a mount boundary. Returns `None` when unknown.

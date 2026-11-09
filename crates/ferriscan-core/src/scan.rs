@@ -134,6 +134,7 @@ pub fn scan(
         node: root_id,
         path: root.to_path_buf(),
         depth: 0,
+        key: reader.root_key(root),
     });
 
     let threads = options.resolved_threads();
@@ -305,7 +306,7 @@ fn worker(
         progress.set_current_path(&job.path);
         buffer.clear();
 
-        match reader.read_dir(&job.path, &mut buffer) {
+        match reader.read_dir_keyed(&job.path, job.key, &mut buffer) {
             Ok(()) => {
                 let mut subdirs = Vec::new();
                 let mut items: u64 = 0;
@@ -348,6 +349,7 @@ fn worker(
                                 node: id,
                                 path: job.path.join(entry.name.as_ref()),
                                 depth: child_depth,
+                                key: entry.key,
                             });
                         }
                     }
