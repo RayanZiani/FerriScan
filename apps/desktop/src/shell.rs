@@ -1,4 +1,6 @@
-//! Application shell: toolbar, volume list, status bar (parity with `AppShell.svelte`).
+//! Application shell: toolbar, volume list, status bar.
+
+#![allow(clippy::large_types_passed_by_value)] // Theme is Copy and moved into 'static GPUI closures
 
 use std::{
     cell::RefCell,
@@ -752,7 +754,7 @@ impl Shell {
                         |s| s.theme = ThemeMode::Light,
                     ),
                     (t("settings.theme_dark"), s.theme == ThemeMode::Dark, |s| {
-                        s.theme = ThemeMode::Dark
+                        s.theme = ThemeMode::Dark;
                     }),
                 ],
             ))
@@ -761,10 +763,10 @@ impl Shell {
                 t("settings.density"),
                 vec![
                     (t("settings.density_comfortable"), !s.compact_density, |s| {
-                        s.compact_density = false
+                        s.compact_density = false;
                     }),
                     (t("settings.density_compact"), s.compact_density, |s| {
-                        s.compact_density = true
+                        s.compact_density = true;
                     }),
                 ],
             ))
@@ -773,7 +775,7 @@ impl Shell {
                 t("settings.units"),
                 vec![
                     (t("settings.units_binary"), s.units == Units::Binary, |s| {
-                        s.units = Units::Binary
+                        s.units = Units::Binary;
                     }),
                     (
                         t("settings.units_decimal"),
@@ -787,10 +789,10 @@ impl Shell {
                 t("settings.include_hidden"),
                 vec![
                     (t("common.yes"), s.include_hidden, |s| {
-                        s.include_hidden = true
+                        s.include_hidden = true;
                     }),
                     (t("common.no"), !s.include_hidden, |s| {
-                        s.include_hidden = false
+                        s.include_hidden = false;
                     }),
                 ],
             ))

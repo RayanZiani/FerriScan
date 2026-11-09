@@ -1,0 +1,22 @@
+[package]
+name = "ferriscan-app"
+description = "FerriScan native desktop app (GPUI)"
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+publish = false
+
+[dependencies]
+ferriscan-core = { workspace = true }
+ferriscan-platform = { workspace = true }
+ferriscan-persist = { workspace = true }
+ferriscan-i18n = { workspace = true }
+ferriscan-actions = { path = "../../crates/ferriscan-actions" }
+# GPUI is not published as a stable crate; pin one Zed revision and bump it as its own task
+# (ADR-0005).
+gpui = { git = "https://github.com/zed-industries/zed", rev = "ddb90e5e89d346f21847281727e1644b8bb2cc37" }
+gpui_platform = { git = "https://github.com/zed-industries/zed", rev = "ddb90e5e89d346f21847281727e1644b8bb2cc37" }
+
+[lints]
+workspace = true

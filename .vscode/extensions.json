@@ -1,10 +1,3 @@
 {
-  "recommendations": [
-    "rust-lang.rust-analyzer",
-    "svelte.svelte-vscode",
-    "esbenp.prettier-vscode",
-    "dbaeumer.vscode-eslint",
-    "tauri-apps.tauri-vscode",
-    "editorconfig.editorconfig"
-  ]
+  "recommendations": ["rust-lang.rust-analyzer", "editorconfig.editorconfig"]
 }
