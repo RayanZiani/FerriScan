@@ -7,6 +7,7 @@
 use std::path::PathBuf;
 use std::process::ExitCode;
 
+use ferriscan_core::fs::DirReader;
 use ferriscan_core::model::{NodeId, SizeBasis};
 use ferriscan_core::scan::controller::CancelToken;
 use ferriscan_core::scan::progress::Progress;
@@ -49,6 +50,7 @@ fn run_scan(args: &[String]) -> ExitCode {
     let mut path: Option<PathBuf> = None;
     let mut top = 20usize;
     let mut include_hidden = true;
+    let mut use_mft = false;
     let mut index = 0;
 
     while index < args.len() {
@@ -58,6 +60,7 @@ fn run_scan(args: &[String]) -> ExitCode {
                 top = args.get(index).and_then(|v| v.parse().ok()).unwrap_or(20);
             }
             "--no-hidden" => include_hidden = false,
+            "--mft" => use_mft = true,
             flag if flag.starts_with('-') => {
                 eprintln!("unknown option: {flag}");
                 return ExitCode::from(2);
@@ -72,7 +75,17 @@ fn run_scan(args: &[String]) -> ExitCode {
         return ExitCode::from(2);
     };
 
-    let reader = PlatformDirReader::new();
+    let reader: Box<dyn DirReader> = if use_mft {
+        match open_mft(&path) {
+            Ok(reader) => reader,
+            Err(message) => {
+                eprintln!("{message}");
+                return ExitCode::from(4);
+            }
+        }
+    } else {
+        Box::new(PlatformDirReader::new())
+    };
     let options = ScanOptions {
         include_hidden,
         ..ScanOptions::default()
@@ -81,7 +94,7 @@ fn run_scan(args: &[String]) -> ExitCode {
     let cancel = CancelToken::new();
 
     let started = std::time::Instant::now();
-    let snapshot = match scan(&reader, &path, &options, &progress, &cancel) {
+    let snapshot = match scan(reader.as_ref(), &path, &options, &progress, &cancel) {
         Ok(snapshot) => snapshot,
         Err(err) => {
             eprintln!("scan failed: {err}");
@@ -137,8 +150,27 @@ fn print_help() {
     println!(
         "ferriscan — headless disk scanner\n\n\
          Usage:\n\
-         \x20 ferriscan scan <path> [--top N] [--no-hidden]\n\
+         \x20 ferriscan scan <path> [--top N] [--no-hidden] [--mft]\n\
          \x20 ferriscan volumes\n\n\
          Exit codes: 0 ok, 2 usage, 3 empty result, 4 failure."
     );
+}
+
+/// Loads the NTFS MFT of the drive holding `path` (Windows, elevated) and reports how long it took.
+#[cfg(windows)]
+fn open_mft(path: &std::path::Path) -> Result<Box<dyn DirReader>, String> {
+    let started = std::time::Instant::now();
+    let reader = ferriscan_platform::mft::MftReader::open(path)
+        .map_err(|err| format!("MFT scan unavailable: {err} (needs an elevated terminal)"))?;
+    eprintln!(
+        "mft       {} entries indexed in {:.2?}",
+        reader.index().len(),
+        started.elapsed()
+    );
+    Ok(Box::new(reader))
+}
+
+#[cfg(not(windows))]
+fn open_mft(_path: &std::path::Path) -> Result<Box<dyn DirReader>, String> {
+    Err("--mft is only available on Windows".to_string())
 }
