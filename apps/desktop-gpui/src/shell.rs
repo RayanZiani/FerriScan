@@ -23,6 +23,9 @@ use gpui::prelude::FluentBuilder as _;
 
 use crate::{format, results::Results, theme::Theme};
 
+/// One selectable value of a setting: label, whether it is current, how to apply it.
+type SettingChoice = (String, bool, fn(&mut Settings));
+
 /// Which main panel is visible.
 #[derive(Clone, Copy, PartialEq, Eq)]
 enum View {
@@ -329,33 +332,32 @@ impl Shell {
         let t = |key: &str| self.catalog.t(key).to_string();
         let s = &self.settings;
         // One labelled group of mutually exclusive choices; `active` marks the current one.
-        let group =
-            |id: &'static str, label: String, options: Vec<(String, bool, fn(&mut Settings))>| {
-                div()
-                    .flex()
-                    .items_center()
-                    .gap(px(12.))
-                    .child(div().w(px(220.)).child(label))
-                    .children(
-                        options
-                            .into_iter()
-                            .enumerate()
-                            .map(|(i, (text, active, apply))| {
-                                div()
-                                    .id((id, i))
-                                    .px(px(10.))
-                                    .py(px(4.))
-                                    .rounded(px(4.))
-                                    .cursor_pointer()
-                                    .bg(if active { th.accent } else { th.surface_3 })
-                                    .text_color(if active { th.text_inverse } else { th.text })
-                                    .on_click(cx.listener(move |this, _, _, cx| {
-                                        this.update_settings(apply, cx);
-                                    }))
-                                    .child(text)
-                            }),
-                    )
-            };
+        let group = |id: &'static str, label: String, options: Vec<SettingChoice>| {
+            div()
+                .flex()
+                .items_center()
+                .gap(px(12.))
+                .child(div().w(px(220.)).child(label))
+                .children(
+                    options
+                        .into_iter()
+                        .enumerate()
+                        .map(|(i, (text, active, apply))| {
+                            div()
+                                .id((id, i))
+                                .px(px(10.))
+                                .py(px(4.))
+                                .rounded(px(4.))
+                                .cursor_pointer()
+                                .bg(if active { th.accent } else { th.surface_3 })
+                                .text_color(if active { th.text_inverse } else { th.text })
+                                .on_click(cx.listener(move |this, _, _, cx| {
+                                    this.update_settings(apply, cx);
+                                }))
+                                .child(text)
+                        }),
+                )
+        };
         div()
             .id("settings")
             .flex_1()
