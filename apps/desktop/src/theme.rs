@@ -6,7 +6,7 @@
 use ferriscan_persist::ThemeMode;
 use gpui::{Rgba, WindowAppearance};
 
-/// Colors for one appearance. High-contrast is tracked as a follow-up (a11y checklist).
+/// Colors for one appearance: light, dark or high contrast.
 #[derive(Clone, Copy, Debug)]
 pub struct Theme {
     pub bg: Rgba,
@@ -51,6 +51,34 @@ impl Theme {
         ],
     };
 
+    /// Black on white-ish extremes with a yellow accent; every pair is at least 7:1.
+    const HIGH_CONTRAST: Self = Self {
+        bg: hex(0x000000),
+        surface: hex(0x000000),
+        surface_2: hex(0x1a1a1a),
+        surface_3: hex(0x333333),
+        border: hex(0xffffff),
+        text: hex(0xffffff),
+        text_muted: hex(0xe0e0e0),
+        text_inverse: hex(0x000000),
+        accent: hex(0xffeb3b),
+        danger: hex(0xff8a80),
+        chart: [
+            hex(0xffeb3b),
+            hex(0x00e5ff),
+            hex(0xff80ab),
+            hex(0xffab40),
+            hex(0xb9f6ca),
+            hex(0xea80fc),
+            hex(0x82b1ff),
+            hex(0xff8a80),
+            hex(0xccff90),
+            hex(0x84ffff),
+            hex(0xf4ff81),
+            hex(0xffd180),
+        ],
+    };
+
     const DARK: Self = Self {
         bg: hex(0x0f1115),
         surface: hex(0x151922),
@@ -82,6 +110,7 @@ impl Theme {
     #[must_use]
     pub fn resolve(mode: ThemeMode, os: WindowAppearance) -> Self {
         let dark = match mode {
+            ThemeMode::HighContrast => return Self::HIGH_CONTRAST,
             ThemeMode::Dark => true,
             ThemeMode::Light => false,
             ThemeMode::System => {
@@ -105,6 +134,40 @@ const fn hex(value: u32) -> Rgba {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    /// WCAG relative luminance contrast ratio.
+    fn contrast(first: Rgba, second: Rgba) -> f32 {
+        let lin = |v: f32| {
+            if v <= 0.03928 {
+                v / 12.92
+            } else {
+                ((v + 0.055) / 1.055).powf(2.4)
+            }
+        };
+        let lum = |c: Rgba| 0.2126 * lin(c.r) + 0.7152 * lin(c.g) + 0.0722 * lin(c.b);
+        let (hi, lo) = (lum(first), lum(second));
+        (hi.max(lo) + 0.05) / (hi.min(lo) + 0.05)
+    }
+
+    #[test]
+    fn high_contrast_pairs_meet_seven_to_one() {
+        let t = Theme::resolve(ThemeMode::HighContrast, WindowAppearance::Light);
+        for (fg, bg) in [
+            (t.text, t.bg),
+            (t.text, t.surface_2),
+            (t.text_muted, t.bg),
+            (t.text_muted, t.surface_2),
+            (t.accent, t.bg),
+            (t.danger, t.bg),
+            (t.text_inverse, t.accent),
+            (t.border, t.bg),
+        ] {
+            assert!(contrast(fg, bg) >= 7.0, "{fg:?} on {bg:?}");
+        }
+        for c in t.chart {
+            assert!(contrast(c, t.bg) >= 7.0, "{c:?}");
+        }
+    }
 
     #[test]
     fn mode_overrides_os_appearance() {

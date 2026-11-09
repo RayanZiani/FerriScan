@@ -799,6 +799,11 @@ impl Shell {
                     (t("settings.theme_dark"), s.theme == ThemeMode::Dark, |s| {
                         s.theme = ThemeMode::Dark;
                     }),
+                    (
+                        t("settings.theme_high_contrast"),
+                        s.theme == ThemeMode::HighContrast,
+                        |s| s.theme = ThemeMode::HighContrast,
+                    ),
                 ],
             ))
             .child(group(

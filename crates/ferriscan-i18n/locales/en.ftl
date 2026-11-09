@@ -97,6 +97,7 @@ settings.theme = Theme
 settings.theme_system = Follow system
 settings.theme_light = Light
 settings.theme_dark = Dark
+settings.theme_high_contrast = High contrast
 settings.density = Density
 settings.density_comfortable = Comfortable
 settings.density_compact = Compact

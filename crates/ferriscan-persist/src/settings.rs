@@ -16,6 +16,8 @@ pub enum ThemeMode {
     Light,
     /// Always dark.
     Dark,
+    /// Maximum contrast: black background, white text, thick contrasting accents.
+    HighContrast,
 }
 
 /// Byte unit convention.
