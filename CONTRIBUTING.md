@@ -43,6 +43,16 @@ cargo test --workspace
 Windows, Linux and macOS are all first-class; a change that only works on one platform must say
 so and update `docs/PLATFORM_MATRIX.md`.
 
+## Versioning
+
+`MAJOR.MINOR.PATCH`, single source in the root `Cargo.toml` (`[workspace.package]`).
+
+- **PATCH**: every new build and every hotfix. `cargo xtask build` bumps it, then builds the release app (`0.1.10` → `0.1.11`).
+- **MINOR** (`0.2.0`): a larger release with small features. `cargo xtask bump minor`.
+- **1.0.0**: the first complete release. **2.0.0** is not planned yet.
+
+Tag releases `vX.Y.Z` (the release workflow builds tags). `cargo xtask bump [patch|minor|major]` only edits the version.
+
 ## Conventions
 
 - English everywhere: code, comments, commit messages, docs, issue titles.
