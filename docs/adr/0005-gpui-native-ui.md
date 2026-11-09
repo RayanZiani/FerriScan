@@ -1,6 +1,6 @@
 # ADR-0005 — GPUI native UI replaces Tauri + Svelte
 
-- **Status:** Proposed
+- **Status:** Accepted (2026-11-09, product owner). Cutover done: Tauri and Svelte are removed.
 - **Date:** 2026-11-09
 - **Deciders:** Product owner (request), `architect`, `ui-engineer`
 - **Related:** supersedes ADR-0001; SPEC §6.3, §7, §10, §16, §17; FILE_ARCHITECTURE §7–§8, §10
@@ -93,11 +93,14 @@ spike fixes the real constraints.
 
 ## Follow-up
 
-- [ ] Run M-G0 and record measurements in this ADR; set status to Accepted or Rejected.
+- [x] Run M-G0 and record measurements in this ADR (see results below).
+- [x] M-G4 cutover: `apps/desktop` (Tauri, Svelte, npm) deleted; GPUI crate is now `apps/desktop`.
 - [ ] Choose GPUI revision, and `gpui-component` yes/no; update FILE_ARCHITECTURE §2 allowlist.
 - [ ] Decide the accessibility approach (e.g. AccessKit bridge) before M-G1.
 - [ ] Rewrite `ROADMAP.md` M3–M6 UI tasks and `TESTING.md`.
-- [ ] `security-reviewer` pass: removal of CSP/capabilities, new `rfd` dialog dependency.
+- [ ] `security-reviewer` pass: removal of CSP/capabilities; decide the fate of the ADR-0003 confirm token now that the UI is in-process.
+- [ ] Windows exe icon and installer (the Tauri icon assets were removed with the shell).
+- [ ] High-contrast theme, keyboard parity, AccessKit verification, IME checks.
 
 ## Spike M-G0 results (2026-11-09, Windows 11, release build)
 
@@ -137,3 +140,14 @@ spike fixes the real constraints.
   same entry counts. Extrapolated 1 TB SSD (~3–4M entries): ~12–15 s.
 - GPUI shell: Scan button per volume, background scan, 10 Hz progress and summary in the status
   bar, Cancel. Verified by build/launch only; the click path is not covered by automated tests.
+
+## Cutover (M-G4, 2026-11-09)
+
+- Removed: `apps/desktop` (Tauri shell, Svelte frontend, npm tooling), Node scripts, CI frontend
+  / contract / e2e jobs, Tauri signing steps.
+- Added: `apps/desktop` is now the GPUI crate `ferriscan-app` (workspace member, pedantic
+  clippy clean). `cargo deny check` passes with the Zed git source allowed and five transitive
+  "unmaintained" advisories ignored with reasons in `deny.toml`.
+- The GPUI tree has the `http` types crate but no reqwest, hyper or TLS stack (ADR-0004 intact).
+- Not yet reproduced: installer, app icon, code signing, Linux/macOS CI runs, `xtask`
+  subcommands (still a stub).

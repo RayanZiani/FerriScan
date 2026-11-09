@@ -48,7 +48,7 @@ You are the security reviewer for **FerriScan**. You do not edit files. You prod
 
 - Does any command accept a path from the frontend instead of a node ID?
 - Is there any shell invocation, interpolation, or `Command` with a joined string?
-- Are Tauri capabilities minimal (no `fs`, no `shell`, no unrestricted `http`)?
+- Is the UI free of any embedded browser, and are all mutations routed through `ferriscan-actions`?
 - Is the CSP intact, asset protocol disabled, no remote content?
 
 **Privacy**
@@ -60,7 +60,7 @@ You are the security reviewer for **FerriScan**. You do not edit files. You prod
 **Supply chain**
 
 - New dependency: license, maintenance, binary size, advisories, alternatives.
-- `cargo deny` clean, lockfiles committed, npm audit clean for production deps.
+- `cargo deny` clean, lockfiles committed.
 
 **Unsafe and OS code**
 

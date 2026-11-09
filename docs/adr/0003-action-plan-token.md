@@ -1,6 +1,6 @@
 # ADR-0003 — Plan + HMAC token for every filesystem mutation
 
-- **Status:** Accepted
+- **Status:** Accepted. Open question after ADR-0005: the token was designed against a compromised webview; the native UI has no such renderer and currently runs plan then execute without the token. `security-reviewer` must decide whether to keep, adapt or retire it.
 - **Date:** 2026-11-04
 - **Deciders:** Core, Security
 - **Related:** SPEC §12, FR-4.2/FR-4.5

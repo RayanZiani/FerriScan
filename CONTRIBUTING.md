@@ -1,23 +1,22 @@
 # Contributing to FerriScan
 
-Thanks for helping. FerriScan is a Rust + Tauri + Svelte desktop app. This guide is the short
+Thanks for helping. FerriScan is a 100 % Rust desktop app built on GPUI. This guide is the short
 version; `AGENTS.md` holds the full engineering rules and applies to humans and AI agents alike.
 
 ## Setup
 
-Prerequisites: Rust stable 1.98+ (pinned by `rust-toolchain.toml`), Node.js 22+, and platform WebView dependencies.
+Prerequisites: Rust 1.98.1 (pinned by `rust-toolchain.toml`) and the platform packages below.
 
 | OS | Extra packages |
 | --- | --- |
-| Windows | WebView2 runtime (evergreen), Visual Studio Build Tools (C++ workload) |
-| Linux | `libwebkit2gtk-4.1-dev libgtk-3-dev libssl-dev librsvg2-dev build-essential` |
+| Windows | Visual Studio Build Tools (C++ workload) |
+| Linux | `libxkbcommon-dev libxkbcommon-x11-dev libwayland-dev libxcb1-dev libx11-xcb-dev libfontconfig-dev libvulkan-dev build-essential` |
 | macOS | `xcode-select --install` |
 
 ```bash
 git clone https://github.com/<org>/ferriscan.git
 cd ferriscan
-npm --prefix apps/desktop install
-npm --prefix apps/desktop run tauri dev
+cargo run -p ferriscan-app
 ```
 
 Headless engine check:
@@ -39,9 +38,6 @@ cargo run -p ferriscan-cli -- scan . --top 20
 cargo fmt --all --check
 cargo clippy --workspace --all-targets -- -D warnings
 cargo test --workspace
-npm --prefix apps/desktop run check
-npm --prefix apps/desktop run lint
-npm --prefix apps/desktop run test
 ```
 
 Windows, Linux and macOS are all first-class; a change that only works on one platform must say

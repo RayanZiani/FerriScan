@@ -22,7 +22,7 @@ You own test infrastructure: `crates/*/tests`, `apps/desktop/tests`, `fixtures/`
   permission errors, hardlinks.
 - Platform integration tests with `tempfile` (long paths, non-UTF-8 names, vanishing files).
 - Table-driven action-safety scenarios (coordinate with `actions-engineer`).
-- Vitest component/store tests; Playwright + `tauri-driver` journeys listed in TESTING §8.
+- GPUI `TestAppContext` view tests and screenshot checks (`scripts/screenshot.ps1`); journeys in TESTING §8.
 - CI: fmt, clippy `-D warnings`, deny, test matrix, i18n-check, frontend check/lint/test, build,
   nightly E2E and benchmarks.
 - `cargo xtask fixtures`, `cargo xtask contract`, `cargo xtask i18n-check`.

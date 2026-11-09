@@ -8,18 +8,19 @@ be green before the next milestone starts. Task IDs are stable and referenced by
 
 ---
 
-## Implementation status (as of the first build)
+## Implementation status (after the GPUI cutover, ADR-0005)
 
-Verified on Windows 11 with `cargo test --workspace` (72 tests), `clippy -D warnings`,
-`cargo fmt --check`, `svelte-check` (0 errors), `vite build` and `vitest` (24 tests).
+Verified on Windows 11 with `cargo test --workspace`, `clippy --workspace --all-targets -D warnings`,
+`cargo fmt --check` and `cargo deny check`. The Tauri/Svelte app and its npm checks no longer
+exist. Linux and macOS builds of the GPUI app have not been run yet.
 
 | Milestone | State | Notes |
 | --- | --- | --- |
 | M0 Foundation | **done** | workspace, CI workflows, toolchain, agents, icon |
 | M1 Volumes | **mostly done** | Windows verified; Linux/macOS code written, not yet run in CI |
-| M2 Scanner core | **core done** | store, controller, workers, errors, progress, aggregation, CLI; platform fast paths and benchmarks pending |
-| M3 Query + table | **mostly done** | children paging, breadcrumbs, tree table, progress UI; search/filter IPC and virtualization pending |
-| M4 Visualizations | **started** | treemap and overview done; sunburst renderer, extensions, largest files pending |
+| M2 Scanner core | **core done** | store, controller, workers, errors, progress, aggregation, CLI; Windows bulk reader done (about 7x faster); Linux/macOS fast paths and benchmarks pending |
+| M3 Query + table | **mostly done** | children paging, size table (virtualized), folder navigation, progress and cancel in the GPUI shell; search, filters and column sorting pending |
+| M4 Visualizations | **started** | treemap done (hover, select, enter); sunburst, extensions, largest files pending |
 | M5 Actions | **started** | plan validation, protected paths, same-volume move; copy/trash/delete/journal pending |
 | M6 Settings/theme/i18n | **started** | persisted settings with migration, tokens, light/dark/high-contrast, English strings |
 | M7–M12 | **not started** | performance hardening, a11y audit, packaging, beta, 1.0 |
@@ -38,13 +39,12 @@ OSes.
 | --- | --- | --- |
 | T0.1 | Workspace `Cargo.toml`, pinned toolchain, rustfmt/clippy/deny config | `rust-toolchain.toml` stable |
 | T0.2 | Create the six crates + `xtask`, each with a doc comment and one smoke test | no logic yet |
-| T0.3 | Tauri 2 + Svelte 5 + Vite 8 scaffold in `apps/desktop` | strict TS, no template leftovers |
-| T0.4 | CI: fmt, clippy `-D warnings`, test matrix, frontend typecheck/lint/test, build | GitHub Actions |
+| T0.3 | ~~Tauri 2 + Svelte 5 + Vite 8 scaffold~~ GPUI app scaffold in `apps/desktop` | superseded by ADR-0005 |
+| T0.4 | CI: fmt, clippy `-D warnings`, test matrix, build | GitHub Actions |
 | T0.5 | `LICENSE` (MIT), `CONTRIBUTING.md`, `CODE_OF_CONDUCT.md`, issue/PR templates | |
-| T0.6 | ADR 0001 (Tauri/Svelte), ADR 0004 (no telemetry) accepted | |
+| T0.6 | ADR 0001 (superseded by 0005), ADR 0004 (no telemetry) accepted | |
 
-**Exit:** `cargo test --workspace`, `npm test`, `npm run build`, `cargo tauri build` (debug
-bundle) succeed on Windows, Linux and macOS CI runners. Empty window opens with correct theme.
+**Exit:** `cargo test --workspace` and `cargo build --release -p ferriscan-app` succeed on Windows, Linux and macOS CI runners. Empty window opens with correct theme.
 
 ---
 
@@ -101,7 +101,7 @@ Owner: Core + UI. Goal: browse a scanned tree efficiently.
 | T3.3 | Search (substring, bounded, path strings) |
 | T3.4 | Filter engine (name/ext/size/age/kind) shared with all views |
 | T3.5 | DTOs + `specta` (or schema) generation + TS mirror + contract test |
-| T3.6 | IPC commands: `get_snapshot_meta`, `get_node`, `get_children`, `get_breadcrumb`, `search` |
+| T3.6 | ~~IPC commands~~ direct engine calls from the app: snapshot meta, node, children, breadcrumb, search |
 | T3.7 | TreeTable component with virtualization, resizable columns, multi-select |
 | T3.8 | Toolbar, breadcrumbs, status bar, empty/loading/error states |
 | T3.9 | Scan progress UI wired to events, cancel button, issues panel |
@@ -182,9 +182,9 @@ Owner: Core.
 | --- | --- |
 | T7.1 | Profile a 5M-entry scan; remove top 10 allocators/locks |
 | T7.2 | Adaptive concurrency for spinning disks; semaphore tuning |
-| T7.3 | IPC payload trimming; zero-copy layout arrays |
+| T7.3 | Zero-copy layout arrays (IPC payload trimming no longer applies) |
 | T7.4 | Memory ceiling validation (≤ 96 B/entry) and arena growth strategy |
-| T7.5 | Cold-start optimization (lazy webview content, prefetch volumes) |
+| T7.5 | Cold-start optimization (prefetch volumes, lazy layout) |
 | T7.6 | Long-running stability test (10 consecutive scans, no leak) |
 
 **Exit:** all budgets in SPEC §6.3 green on reference hardware; memory profile documented;
@@ -286,4 +286,4 @@ M0 ──► M1 ──┐
 
 M6 can start after M3 (needs DTOs); M8 needs M4 and M5 for complete surfaces. M5 can run in
 parallel with M4 if two agents work simultaneously — they touch disjoint files except
-`state/view.svelte.ts`.
+`apps/desktop/src/shell.rs`.

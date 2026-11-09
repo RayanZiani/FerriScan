@@ -25,7 +25,7 @@ Run once per release on each platform. Record the build SHA and the tester.
 
 ## Screen reader
 
-- [ ] NVDA + Firefox/WebView2 (Windows): names, roles, states of the volume list, tree rows,
+- [ ] NVDA or Narrator (Windows, native GPUI via AccessKit; unverified): names, roles, states of the volume list, tree rows,
       chart alternatives and dialogs are announced correctly.
 - [ ] VoiceOver (macOS): same journey.
 - [ ] Orca (Linux): same journey.
