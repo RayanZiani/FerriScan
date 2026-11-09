@@ -8,7 +8,7 @@ pub const NONE: u32 = u32::MAX;
 /// Index of a node inside a [`crate::model::NodeStore`].
 ///
 /// `NodeId` is deliberately not a pointer: it survives store growth, is stable
-/// for the lifetime of a snapshot, and costs 4 bytes across the IPC boundary.
+/// for the lifetime of a snapshot, and costs 4 bytes when stored in a view.
 #[derive(Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash)]
 pub struct NodeId(u32);
 

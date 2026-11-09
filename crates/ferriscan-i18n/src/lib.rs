@@ -21,7 +21,7 @@ pub const FALLBACK: &str = "en";
 /// Detects the user's preferred locale from the environment.
 ///
 /// Reads `LANG`/`LC_ALL` on Unix and `LANG` on Windows (where the system locale
-/// is usually available through the webview anyway). Returns a shipped locale or
+/// is not in the environment). Returns a shipped locale or
 /// [`FALLBACK`].
 #[must_use]
 pub fn detect_system_locale() -> String {

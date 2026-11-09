@@ -1,6 +1,6 @@
 //! Operating-system integration.
 //!
-//! This crate is the only place outside the Tauri shell where `unsafe` and
+//! This crate is the only place where `unsafe` and
 //! `cfg(target_os)` are allowed. It implements the engine traits
 //! ([`ferriscan_core::fs::DirReader`]) and reports volumes, system theme and
 //! shell actions.

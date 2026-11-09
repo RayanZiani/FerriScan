@@ -7,7 +7,7 @@ use rustc_hash::FxHashMap;
 
 /// Stable identifiers for every failure the engine can report.
 ///
-/// The frontend maps these to localized messages; the raw OS text is only shown
+/// The UI maps these to localized messages; the raw OS text is only shown
 /// inside an expandable "technical details" block.
 #[derive(Clone, Copy, PartialEq, Eq, Hash, Debug)]
 #[non_exhaustive]
