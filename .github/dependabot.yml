@@ -6,24 +6,11 @@ updates:
       interval: weekly
     open-pull-requests-limit: 5
     groups:
-      tauri:
-        patterns: ["tauri*", "wry", "tao"]
       windows-sys:
         patterns: ["windows*"]
       dev-deps:
         dependency-type: development
         patterns: ["proptest*", "criterion*", "insta*", "tempfile*"]
-
-  - package-ecosystem: npm
-    directory: /apps/desktop
-    schedule:
-      interval: weekly
-    open-pull-requests-limit: 5
-    groups:
-      svelte:
-        patterns: ["svelte*", "@sveltejs/*"]
-      tooling:
-        dependency-type: development
 
   - package-ecosystem: github-actions
     directory: /

@@ -13,7 +13,10 @@ jobs:
       - uses: actions/checkout@v4
       - uses: dtolnay/rust-toolchain@stable
       - uses: Swatinem/rust-cache@v2
-      - run: sudo apt-get update && sudo apt-get install -y libwebkit2gtk-4.1-dev libgtk-3-dev librsvg2-dev
+      - run: |
+          sudo apt-get update
+          sudo apt-get install -y libxkbcommon-dev libxkbcommon-x11-dev libwayland-dev \
+            libxcb1-dev libx11-xcb-dev libfontconfig-dev libvulkan-dev
       - run: cargo xtask fixtures --size 1m
       - run: cargo bench -p ferriscan-core -- --save-baseline nightly
       - run: cargo xtask budget
@@ -22,32 +25,3 @@ jobs:
         with:
           name: criterion
           path: target/criterion
-
-  e2e:
-    name: e2e (${{ matrix.os }})
-    strategy:
-      fail-fast: false
-      matrix:
-        os: [windows-2022, ubuntu-24.04]
-    runs-on: ${{ matrix.os }}
-    steps:
-      - uses: actions/checkout@v4
-      - uses: dtolnay/rust-toolchain@stable
-      - uses: actions/setup-node@v4
-        with:
-          node-version: 22
-      - name: Linux deps
-        if: runner.os == 'Linux'
-        run: |
-          sudo apt-get update
-          sudo apt-get install -y libwebkit2gtk-4.1-dev libgtk-3-dev librsvg2-dev webkit2gtk-driver xvfb
-      - run: npm --prefix apps/desktop ci
-      - run: cargo xtask fixtures --size e2e
-      - run: npm --prefix apps/desktop run test:e2e
-        env:
-          DISPLAY: ":99"
-      - uses: actions/upload-artifact@v4
-        if: failure()
-        with:
-          name: e2e-${{ matrix.os }}
-          path: apps/desktop/test-results
