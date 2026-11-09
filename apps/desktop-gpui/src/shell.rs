@@ -12,7 +12,7 @@ use ferriscan_core::{
     scan::{ScanOptions, controller::CancelToken, progress::Progress, scan},
 };
 use ferriscan_i18n::Catalog;
-use ferriscan_persist::{Settings, app_dirs};
+use ferriscan_persist::{AppDirs, Settings, ThemeMode, Units, app_dirs};
 use ferriscan_platform::volumes::{Volume, VolumeKind};
 use gpui::{
     Context, InteractiveElement, IntoElement, ParentElement, Render, StatefulInteractiveElement,
@@ -22,6 +22,14 @@ use gpui::{
 use gpui::prelude::FluentBuilder as _;
 
 use crate::{format, results::Results, theme::Theme};
+
+/// Which main panel is visible.
+#[derive(Clone, Copy, PartialEq, Eq)]
+enum View {
+    Volumes,
+    Results,
+    Settings,
+}
 
 /// What the status bar shows about the scan.
 enum ScanUi {
@@ -50,7 +58,8 @@ pub struct Shell {
     toasts: Vec<Toast>,
     next_toast: u64,
     results: Option<Results>,
-    show_results: bool,
+    view: View,
+    dirs: AppDirs,
     progress: Arc<Progress>,
     cancel: Arc<CancelToken>,
 }
@@ -60,6 +69,7 @@ impl Shell {
         let dirs = app_dirs("FerriScan");
         let mut shell = Self {
             settings: Settings::load(&dirs.settings_file()),
+            dirs,
             catalog: Catalog::new(),
             volumes: Vec::new(),
             loading: false,
@@ -67,7 +77,7 @@ impl Shell {
             toasts: Vec::new(),
             next_toast: 0,
             results: None,
-            show_results: false,
+            view: View::Volumes,
             progress: Arc::new(Progress::new()),
             cancel: Arc::new(CancelToken::new()),
         };
@@ -148,7 +158,7 @@ impl Shell {
                         let snapshot = Arc::new(snapshot);
                         if snapshot.status != SnapshotStatus::Cancelled {
                             this.results = Some(Results::new(Arc::clone(&snapshot)));
-                            this.show_results = true;
+                            this.view = View::Results;
                         }
                         ScanUi::Done(snapshot)
                     }
@@ -305,6 +315,115 @@ impl Shell {
             )
     }
 
+    /// Applies `change`, persists the result and reports a failed save as a toast.
+    fn update_settings(&mut self, change: impl FnOnce(&mut Settings), cx: &mut Context<Self>) {
+        change(&mut self.settings);
+        if self.settings.save(&self.dirs.settings_file()).is_err() {
+            let text = self.catalog.t("common.error").to_string();
+            self.push_toast(text, true, cx);
+        }
+        cx.notify();
+    }
+
+    fn render_settings(&self, th: Theme, cx: &mut Context<Self>) -> impl IntoElement {
+        let t = |key: &str| self.catalog.t(key).to_string();
+        let s = &self.settings;
+        // One labelled group of mutually exclusive choices; `active` marks the current one.
+        let group =
+            |id: &'static str, label: String, options: Vec<(String, bool, fn(&mut Settings))>| {
+                div()
+                    .flex()
+                    .items_center()
+                    .gap(px(12.))
+                    .child(div().w(px(220.)).child(label))
+                    .children(
+                        options
+                            .into_iter()
+                            .enumerate()
+                            .map(|(i, (text, active, apply))| {
+                                div()
+                                    .id((id, i))
+                                    .px(px(10.))
+                                    .py(px(4.))
+                                    .rounded(px(4.))
+                                    .cursor_pointer()
+                                    .bg(if active { th.accent } else { th.surface_3 })
+                                    .text_color(if active { th.text_inverse } else { th.text })
+                                    .on_click(cx.listener(move |this, _, _, cx| {
+                                        this.update_settings(apply, cx);
+                                    }))
+                                    .child(text)
+                            }),
+                    )
+            };
+        div()
+            .id("settings")
+            .flex_1()
+            .overflow_y_scroll()
+            .p(px(16.))
+            .flex()
+            .flex_col()
+            .gap(px(12.))
+            .child(div().child(t("settings.title")))
+            .child(group(
+                "theme",
+                t("settings.theme"),
+                vec![
+                    (
+                        t("settings.theme_system"),
+                        s.theme == ThemeMode::System,
+                        |s| s.theme = ThemeMode::System,
+                    ),
+                    (
+                        t("settings.theme_light"),
+                        s.theme == ThemeMode::Light,
+                        |s| s.theme = ThemeMode::Light,
+                    ),
+                    (t("settings.theme_dark"), s.theme == ThemeMode::Dark, |s| {
+                        s.theme = ThemeMode::Dark
+                    }),
+                ],
+            ))
+            .child(group(
+                "density",
+                t("settings.density"),
+                vec![
+                    (t("settings.density_comfortable"), !s.compact_density, |s| {
+                        s.compact_density = false
+                    }),
+                    (t("settings.density_compact"), s.compact_density, |s| {
+                        s.compact_density = true
+                    }),
+                ],
+            ))
+            .child(group(
+                "units",
+                t("settings.units"),
+                vec![
+                    (t("settings.units_binary"), s.units == Units::Binary, |s| {
+                        s.units = Units::Binary
+                    }),
+                    (
+                        t("settings.units_decimal"),
+                        s.units == Units::Decimal,
+                        |s| s.units = Units::Decimal,
+                    ),
+                ],
+            ))
+            .child(group(
+                "hidden",
+                t("settings.include_hidden"),
+                vec![
+                    (t("common.yes"), s.include_hidden, |s| {
+                        s.include_hidden = true
+                    }),
+                    (t("common.no"), !s.include_hidden, |s| {
+                        s.include_hidden = false
+                    }),
+                ],
+            ))
+    }
+
     fn dismiss_toast(&mut self, id: u64, cx: &mut Context<Self>) {
         self.toasts.retain(|t| t.id != id);
         cx.notify();
@@ -454,7 +573,7 @@ impl Render for Shell {
 
         let status = self.status_text();
         let running = matches!(self.scan, ScanUi::Running { .. });
-        let show_results = self.show_results && self.results.is_some();
+        let view = self.view;
         let toasts: Vec<_> = self
             .toasts
             .iter()
@@ -492,38 +611,29 @@ impl Render for Shell {
                     .border_b_1()
                     .border_color(th.border)
                     .child(t("app.name"))
-                    .when(self.results.is_some(), |d| {
-                        let tab = |id: &'static str, label: String, active: bool, results: bool| {
+                    .child({
+                        let tab = |id: &'static str, label: String, target: View| {
                             div()
                                 .id(id)
                                 .px(px(10.))
                                 .py(px(2.))
                                 .rounded(px(4.))
                                 .cursor_pointer()
-                                .when(active, |d| d.bg(th.surface_3))
+                                .when(view == target, |d| d.bg(th.surface_3))
                                 .on_click(cx.listener(move |this, _, _, cx| {
-                                    this.show_results = results;
+                                    this.view = target;
                                     cx.notify();
                                 }))
                                 .child(label)
                         };
-                        d.child(
-                            div()
-                                .flex()
-                                .gap(px(4.))
-                                .child(tab(
-                                    "tab-volumes",
-                                    t("nav.volumes"),
-                                    !self.show_results,
-                                    false,
-                                ))
-                                .child(tab(
-                                    "tab-results",
-                                    t("nav.results"),
-                                    self.show_results,
-                                    true,
-                                )),
-                        )
+                        div()
+                            .flex()
+                            .gap(px(4.))
+                            .child(tab("tab-volumes", t("nav.volumes"), View::Volumes))
+                            .when(self.results.is_some(), |d| {
+                                d.child(tab("tab-results", t("nav.results"), View::Results))
+                            })
+                            .child(tab("tab-settings", t("nav.settings"), View::Settings))
                     })
                     .child(
                         div()
@@ -538,7 +648,9 @@ impl Render for Shell {
                             .child(t("volumes.refresh")),
                     ),
             )
-            .child(if show_results {
+            .child(if view == View::Settings {
+                self.render_settings(th, cx).into_any_element()
+            } else if view == View::Results && self.results.is_some() {
                 self.render_results(th, cx).into_any_element()
             } else {
                 div()
