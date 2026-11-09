@@ -136,3 +136,5 @@ error.E_CHANGED = The item changed on disk
 error.E_NOSPC = Not enough free space
 status.volumes = {count} volumes
 table.up = Up
+common.yes = Yes
+common.no = No
