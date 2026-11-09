@@ -8,6 +8,7 @@
 #![deny(unsafe_op_in_unsafe_fn)]
 
 pub mod dir_reader;
+pub mod shell;
 pub mod volumes;
 
 mod sys;
