@@ -43,9 +43,9 @@ pub(crate) struct Record {
     /// `true` when this is a base record (extension records only carry `$DATA` information).
     pub is_base: bool,
     pub is_dir: bool,
-    /// Parent directory record number, from the preferred `$FILE_NAME`.
-    pub parent: u64,
-    pub name: Option<Box<str>>,
+    /// Every hard link of the file (an extension record may carry some of them) as `(parent record number, name)`. DOS-only short names are
+    /// left out, so a file with one name has one entry.
+    pub links: Vec<(u64, Box<str>)>,
     /// Windows file attribute bits (`attr::*`).
     pub attrs: u32,
     /// Modification time, Unix seconds.
@@ -121,7 +121,6 @@ pub(crate) fn parse(rec: &mut [u8], number: u64) -> Option<Record> {
     };
     let used = usize::try_from(u32_at(rec, 0x18)?).ok()?.min(rec.len());
     let mut off = usize::from(u16_at(rec, 0x14)?);
-    let mut name_rank = 0u8;
 
     while off + 16 <= used {
         let ty = u32_at(rec, off)?;
@@ -143,16 +142,10 @@ pub(crate) fn parse(rec: &mut [u8], number: u64) -> Option<Record> {
                 out.mtime = modified / 10_000_000 - FILETIME_UNIX_DELTA;
                 out.attrs = u32_at(c, 32)?;
             }
-            ATTR_FILE_NAME if !non_resident && out.is_base => {
+            ATTR_FILE_NAME if !non_resident => {
                 let c = content(attr)?;
-                let namespace = *c.get(0x41)?;
-                // Prefer Win32 (1) and Win32+DOS (3) over POSIX (0); never use DOS-only (2).
-                let rank = match namespace {
-                    1 | 3 => 2,
-                    0 => 1,
-                    _ => 0,
-                };
-                if rank > name_rank {
+                // Namespace 2 is the DOS short name of a link that also has a Win32 name.
+                if *c.get(0x41)? != 2 {
                     let n = usize::from(*c.get(0x40)?);
                     let raw = c.get(0x42..0x42 + n * 2)?;
                     let units: Vec<u16> = raw
@@ -161,9 +154,10 @@ pub(crate) fn parse(rec: &mut [u8], number: u64) -> Option<Record> {
                         .iter()
                         .map(|p| u16::from_le_bytes(*p))
                         .collect();
-                    out.name = Some(String::from_utf16_lossy(&units).into_boxed_str());
-                    out.parent = u64_at(c, 0)? & REF_MASK;
-                    name_rank = rank;
+                    out.links.push((
+                        u64_at(c, 0)? & REF_MASK,
+                        String::from_utf16_lossy(&units).into_boxed_str(),
+                    ));
                 }
             }
             ATTR_DATA if name_len == 0 => {
@@ -351,7 +345,7 @@ mod tests {
     }
 
     #[test]
-    fn parses_a_file_and_prefers_the_long_name() {
+    fn parses_a_file_and_skips_the_dos_short_name() {
         let attrs = [
             std_info(attr::HIDDEN, 1_700_000_000),
             file_name(5, "REPORT~1.TXT", 2),
@@ -360,8 +354,8 @@ mod tests {
         ];
         let mut rec = build(1, 0, &attrs);
         let r = parse(&mut rec, 40).expect("record");
-        assert_eq!(r.name.as_deref(), Some("report final.txt"));
-        assert_eq!((r.parent, r.size, r.allocated), (5, 10_000, 12_288));
+        assert_eq!(r.links, [(5, "report final.txt".into())]);
+        assert_eq!((r.size, r.allocated), (10_000, 12_288));
         assert_eq!(r.mtime, 1_700_000_000);
         assert!(r.is_base && !r.is_dir && r.attrs & attr::HIDDEN != 0);
         assert_eq!(r.base, 40);
@@ -389,6 +383,14 @@ mod tests {
         assert!(parse(&mut torn, 1).is_none());
         let mut junk = vec![0u8; REC];
         assert!(parse(&mut junk, 1).is_none());
+    }
+
+    #[test]
+    fn every_hard_link_is_listed() {
+        let attrs = [file_name(5, "a.dll", 1), file_name(40, "b.dll", 1)];
+        let mut rec = build(1, 0, &attrs);
+        let r = parse(&mut rec, 9).unwrap();
+        assert_eq!(r.links, [(5, "a.dll".into()), (40, "b.dll".into())]);
     }
 
     #[test]
