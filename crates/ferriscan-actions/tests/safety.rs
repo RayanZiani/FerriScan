@@ -119,11 +119,12 @@ fn unimplemented_operations_fail_loudly_instead_of_pretending() {
     let src = dir.join("a.txt");
     write(&src, 10);
 
-    for kind in [
-        ActionKind::Copy,
-        ActionKind::Trash,
-        ActionKind::DeletePermanent,
-    ] {
+    // Trash is implemented on Windows only; elsewhere it must still fail loudly.
+    let mut kinds = vec![ActionKind::Copy, ActionKind::DeletePermanent];
+    if cfg!(not(windows)) {
+        kinds.push(ActionKind::Trash);
+    }
+    for kind in kinds {
         let dest = dir.join("out");
         fs::create_dir_all(&dest).expect("dest");
         let outcome = if kind == ActionKind::Copy {
