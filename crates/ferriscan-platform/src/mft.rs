@@ -415,7 +415,7 @@ mod tests {
         b.add(99, &ext);
         b.add(21, &rec(20, "x.txt", false, 1));
         let r = MftReader::new(b.finish());
-        assert_eq!(r.root_key(Path::new("C:\Docs")), 20);
+        assert_eq!(r.root_key(Path::new(r"C:\Docs")), 20);
         let mut out = Vec::new();
         r.read_dir_keyed(Path::new(""), 20, &mut out).unwrap();
         assert_eq!(out.len(), 1);
