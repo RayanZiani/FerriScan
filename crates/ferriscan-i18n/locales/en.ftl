@@ -1,0 +1,137 @@
+app.name = FerriScan
+app.tagline = Fast, private disk space analysis
+
+nav.volumes = Volumes
+nav.results = Results
+nav.settings = Settings
+
+volumes.title = Volumes
+volumes.refresh = Refresh
+volumes.scan = Scan
+volumes.free_of = {free} free of {total}
+volumes.locked = Locked
+volumes.read_only = Read-only
+volumes.empty = No volumes found
+volumes.empty_hint = Plug in a drive or refresh the list.
+volumes.error = Could not list volumes
+volumes.retry = Try again
+
+kind.fixed = Internal
+kind.removable = Removable
+kind.network = Network
+kind.optical = Optical
+kind.ram = RAM disk
+kind.unknown = Unknown
+
+scan.start = Start scan
+scan.cancel = Cancel
+scan.cancelling = Cancelling…
+scan.preparing = Preparing…
+scan.scanning = Scanning
+scan.finalizing = Finishing…
+scan.ready = Done
+scan.cancelled = Cancelled
+scan.failed = Scan failed
+scan.progress.items = {count} items
+scan.progress.bytes = {size} read
+scan.progress.rate = {rate}/s
+scan.progress.errors = {count} errors
+scan.empty = Nothing scanned yet
+scan.empty_hint = Pick a volume on the left or scan a folder.
+scan.summary.files = Files
+scan.summary.folders = Folders
+scan.summary.size = Size
+scan.summary.duration = Duration
+scan.summary.errors = Errors
+
+view.table = Table
+view.treemap = Treemap
+view.sunburst = Sunburst
+view.extensions = Extensions
+view.largest = Largest files
+
+table.name = Name
+table.size = Size
+table.allocated = On disk
+table.items = Items
+table.modified = Modified
+table.type = Type
+table.empty = This folder is empty
+table.loading = Loading…
+table.more = {count} more items
+table.sort_ascending = Sort ascending
+table.sort_descending = Sort descending
+table.selected = {count} selected
+
+search.placeholder = Search this scan
+search.results = {count} results
+search.none = No match
+search.clear = Clear search
+
+actions.open = Open
+actions.reveal = Show in file manager
+actions.copy_path = Copy path
+actions.move = Move to…
+actions.copy = Copy to…
+actions.rename = Rename
+actions.trash = Move to trash
+actions.delete = Delete permanently
+actions.undo = Undo
+actions.plan_title = Review before continuing
+actions.plan_items = {count} items
+actions.plan_bytes = {size} total
+actions.confirm = Run
+actions.cancel = Cancel
+actions.done = {count} done
+actions.failed = {count} failed
+actions.protected = This location is protected
+
+settings.title = Settings
+settings.appearance = Appearance
+settings.theme = Theme
+settings.theme_system = Follow system
+settings.theme_light = Light
+settings.theme_dark = Dark
+settings.density = Density
+settings.density_comfortable = Comfortable
+settings.density_compact = Compact
+settings.language = Language
+settings.language_system = Follow system
+settings.units = Size units
+settings.units_binary = Binary (KiB, MiB)
+settings.units_decimal = Decimal (kB, MB)
+settings.scan = Scanning
+settings.include_hidden = Include hidden and system files
+settings.threads = Worker threads (0 = automatic)
+settings.excludes = Excluded names or patterns
+settings.privacy = Privacy
+settings.keep_cache = Keep scan cache between sessions
+settings.verbose_logging = Log full file paths (diagnostics)
+settings.reset = Reset all settings
+settings.reset_confirm = Reset every preference to its default?
+settings.about = About
+settings.version = Version {version}
+
+common.cancel = Cancel
+common.confirm = Confirm
+common.close = Close
+common.retry = Retry
+common.dismiss = Dismiss
+common.loading = Loading…
+common.error = Something went wrong
+common.unknown = Unknown
+common.bytes = bytes
+common.na = —
+
+error.E_PERM = Permission denied
+error.E_NOTFOUND = File not found
+error.E_TOOLONG = Path is too long
+error.E_LOOP = Symbolic link loop
+error.E_IO = Disk read error
+error.E_INVALID = Invalid path
+error.E_BUSY = File is in use
+error.E_CANCELLED = Cancelled
+error.E_UNSUPPORTED = Not supported here
+error.E_CHANGED = The item changed on disk
+error.E_NOSPC = Not enough free space
+status.volumes = {count} volumes
