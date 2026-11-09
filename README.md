@@ -37,7 +37,7 @@ all rendered from a Rust scanning engine built for tens of millions of entries.
 
 ## Quick start
 
-Prerequisites: Rust (stable 1.90, pinned by `rust-toolchain.toml`), Node.js 22+, and the
+Prerequisites: Rust (stable 1.98, pinned by `rust-toolchain.toml`), Node.js 22+, and the
 platform WebView dependencies (WebView2 on Windows, `libwebkit2gtk-4.1` on Linux, Xcode CLT on
 macOS).
 
