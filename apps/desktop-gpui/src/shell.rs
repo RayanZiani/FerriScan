@@ -8,6 +8,7 @@ use std::{
     time::{Duration, Instant},
 };
 
+use ferriscan_actions::{ActionKind, ActionPlan, PlanStatus, execute::execute, plan::plan};
 use ferriscan_core::{
     model::NodeId,
     model::{Snapshot, SnapshotStatus},
@@ -17,7 +18,7 @@ use ferriscan_i18n::Catalog;
 use ferriscan_persist::{AppDirs, Settings, ThemeMode, Units, app_dirs};
 use ferriscan_platform::volumes::{Volume, VolumeKind};
 use gpui::{
-    Bounds, Context, InteractiveElement, IntoElement, ParentElement, Render,
+    Bounds, ClipboardItem, Context, InteractiveElement, IntoElement, ParentElement, Render,
     StatefulInteractiveElement, Styled, Window, div, px, relative, uniform_list,
 };
 
@@ -27,6 +28,13 @@ use crate::{format, results::Results, theme::Theme, treemap::TreemapState};
 
 /// One selectable value of a setting: label, whether it is current, how to apply it.
 type SettingChoice = (String, bool, fn(&mut Settings));
+
+/// A validated destructive action waiting for the user's confirmation.
+struct Pending {
+    plan: ActionPlan,
+    name: String,
+    bytes: u64,
+}
 
 /// How the results panel presents the current folder.
 #[derive(Clone, Copy, PartialEq, Eq)]
@@ -71,6 +79,8 @@ pub struct Shell {
     next_toast: u64,
     results: Option<Results>,
     view: View,
+    selected: Option<NodeId>,
+    pending: Option<Pending>,
     mode: ResultsMode,
     treemap: Rc<RefCell<TreemapState>>,
     tm_hover: Option<usize>,
@@ -93,6 +103,8 @@ impl Shell {
             next_toast: 0,
             results: None,
             view: View::Volumes,
+            selected: None,
+            pending: None,
             mode: ResultsMode::Table,
             treemap: Rc::default(),
             tm_hover: None,
@@ -177,6 +189,8 @@ impl Shell {
                         if snapshot.status != SnapshotStatus::Cancelled {
                             this.results = Some(Results::new(Arc::clone(&snapshot)));
                             this.view = View::Results;
+                            this.selected = None;
+                            this.pending = None;
                         }
                         ScanUi::Done(snapshot)
                     }
@@ -201,9 +215,183 @@ impl Shell {
         .detach();
     }
 
+    fn select_node(&mut self, id: NodeId, cx: &mut Context<Self>) {
+        self.selected = Some(id);
+        self.pending = None;
+        cx.notify();
+    }
+
+    /// Absolute path of a node, resolved from the snapshot (nodes are the only handle the UI keeps).
+    fn node_path(&self, id: NodeId) -> Option<PathBuf> {
+        let r = self.results.as_ref()?;
+        Some(
+            r.snapshot
+                .meta
+                .root_path
+                .join(r.snapshot.store.relative_path(id)),
+        )
+    }
+
+    fn open_selected(&mut self, reveal: bool, cx: &mut Context<Self>) {
+        let Some(path) = self.selected.and_then(|id| self.node_path(id)) else {
+            return;
+        };
+        let target = if reveal {
+            path.parent()
+                .map_or(path.clone(), std::path::Path::to_path_buf)
+        } else {
+            path
+        };
+        if ferriscan_platform::shell::open_path(&target).is_err() {
+            let text = self.catalog.t("common.error").to_string();
+            self.push_toast(text, true, cx);
+        }
+    }
+
+    fn copy_selected_path(&mut self, cx: &mut Context<Self>) {
+        if let Some(path) = self.selected.and_then(|id| self.node_path(id)) {
+            cx.write_to_clipboard(ClipboardItem::new_string(path.display().to_string()));
+        }
+    }
+
+    /// Phase one of the two-phase flow (ADR-0003): validate and show what would happen.
+    fn request_trash(&mut self, cx: &mut Context<Self>) {
+        let Some(id) = self.selected else { return };
+        let Some(path) = self.node_path(id) else {
+            return;
+        };
+        let (name, bytes) = self.results.as_ref().map_or_else(Default::default, |r| {
+            (
+                r.snapshot.store.name(id).to_string(),
+                r.snapshot.store.get(id).size,
+            )
+        });
+        match plan(ActionKind::Trash, std::slice::from_ref(&path), None) {
+            Ok(p) if p.items.iter().all(|i| i.status == PlanStatus::Ready) && !p.needs_override => {
+                self.pending = Some(Pending {
+                    plan: p,
+                    name,
+                    bytes,
+                });
+            }
+            Ok(_) => {
+                let text = self.catalog.t("actions.protected").to_string();
+                self.push_toast(text, true, cx);
+            }
+            Err(_) => {
+                let text = self.catalog.t("common.error").to_string();
+                self.push_toast(text, true, cx);
+            }
+        }
+        cx.notify();
+    }
+
+    /// Phase two: run the reviewed plan off the UI thread, then rescan so the snapshot is fresh.
+    fn confirm_trash(&mut self, cx: &mut Context<Self>) {
+        let Some(pending) = self.pending.take() else {
+            return;
+        };
+        let root = self
+            .results
+            .as_ref()
+            .map(|r| r.snapshot.meta.root_path.clone());
+        cx.notify();
+        cx.spawn(async move |this, cx| {
+            let plan = pending.plan;
+            let report = cx
+                .background_executor()
+                .spawn(async move { execute(&plan) })
+                .await;
+            let _ = this.update(cx, |this, cx| {
+                if report.failed > 0 {
+                    let text = this
+                        .catalog
+                        .t_args("actions.failed", &[("count", &report.failed.to_string())]);
+                    this.push_toast(text, true, cx);
+                }
+                if report.succeeded > 0 {
+                    let text = this
+                        .catalog
+                        .t_args("actions.done", &[("count", &report.succeeded.to_string())]);
+                    this.push_toast(text, false, cx);
+                    if let Some(root) = root {
+                        this.start_scan(root, cx);
+                    }
+                }
+            });
+        })
+        .detach();
+    }
+
+    fn render_action_bar(&self, th: Theme, cx: &mut Context<Self>) -> Option<gpui::Div> {
+        let id = self.selected?;
+        let r = self.results.as_ref()?;
+        let t = |key: &str| self.catalog.t(key).to_string();
+        let button = |id: &'static str, label: String, danger: bool| {
+            div()
+                .id(id)
+                .px(px(10.))
+                .py(px(2.))
+                .rounded(px(4.))
+                .cursor_pointer()
+                .bg(if danger { th.danger } else { th.surface_3 })
+                .text_color(if danger { th.text_inverse } else { th.text })
+                .child(label)
+        };
+        let bar = div()
+            .flex()
+            .items_center()
+            .gap(px(8.))
+            .child(div().flex_1().child(r.snapshot.store.name(id).to_string()));
+        if let Some(p) = &self.pending {
+            let units = self.settings.units;
+            return Some(
+                bar.child(div().text_color(th.danger).child(t("actions.plan_title")))
+                    .child(self.catalog.t_args(
+                        "actions.plan_items",
+                        &[("count", &p.plan.ready_count().to_string())],
+                    ))
+                    .child(self.catalog.t_args(
+                        "actions.plan_bytes",
+                        &[("size", &format::bytes(p.bytes, units))],
+                    ))
+                    .child(div().child(p.name.clone()))
+                    .child(
+                        button("trash-run", t("actions.confirm"), true)
+                            .on_click(cx.listener(|this, _, _, cx| this.confirm_trash(cx))),
+                    )
+                    .child(button("trash-cancel", t("actions.cancel"), false).on_click(
+                        cx.listener(|this, _, _, cx| {
+                            this.pending = None;
+                            cx.notify();
+                        }),
+                    )),
+            );
+        }
+        Some(
+            bar.child(
+                button("act-open", t("actions.open"), false)
+                    .on_click(cx.listener(|this, _, _, cx| this.open_selected(false, cx))),
+            )
+            .child(
+                button("act-reveal", t("actions.reveal"), false)
+                    .on_click(cx.listener(|this, _, _, cx| this.open_selected(true, cx))),
+            )
+            .child(
+                button("act-copy", t("actions.copy_path"), false)
+                    .on_click(cx.listener(|this, _, _, cx| this.copy_selected_path(cx))),
+            )
+            .child(
+                button("act-trash", t("actions.trash"), true)
+                    .on_click(cx.listener(|this, _, _, cx| this.request_trash(cx))),
+            ),
+        )
+    }
+
     fn open_node(&mut self, id: NodeId, cx: &mut Context<Self>) {
         if let Some(r) = &mut self.results {
             r.open(id);
+            self.selected = None;
             self.tm_hover = None;
             cx.notify();
         }
@@ -270,7 +458,14 @@ impl Shell {
                             let target = st.hit(x, y).and_then(|i| st.tiles.get(i).copied());
                             drop(st);
                             if let Some(tile) = target.filter(|t| !t.node.is_none()) {
-                                this.open_node(tile.node, cx);
+                                let is_dir = this.results.as_ref().is_some_and(|r| {
+                                    r.snapshot.store.get(tile.node).flags().is_dir()
+                                });
+                                if is_dir && ev.click_count >= 2 {
+                                    this.open_node(tile.node, cx);
+                                } else {
+                                    this.select_node(tile.node, cx);
+                                }
                             }
                         }),
                     )
@@ -324,6 +519,7 @@ impl Shell {
     fn go_up(&mut self, cx: &mut Context<Self>) {
         if let Some(r) = &mut self.results {
             r.up();
+            self.selected = None;
             self.tm_hover = None;
             cx.notify();
         }
@@ -402,7 +598,8 @@ impl Shell {
             .flex_col()
             .p(px(16.))
             .gap(px(8.))
-            .child(header);
+            .child(header)
+            .children(self.render_action_bar(th, cx));
         if self.mode == ResultsMode::Treemap {
             return frame.child(self.render_treemap(th, cx));
         }
@@ -429,6 +626,7 @@ impl Shell {
                             return Vec::new();
                         };
                         let store = &r.snapshot.store;
+                        let selected = this.selected;
                         let total = store.get(r.current).size.max(1);
                         range
                             .filter_map(|i| r.rows.get(i).copied())
@@ -443,13 +641,18 @@ impl Shell {
                                     .h(row_h)
                                     .px(px(8.))
                                     .rounded(px(4.))
-                                    .when(is_dir, |d| {
-                                        d.cursor_pointer().hover(|d| d.bg(th.surface_2)).on_click(
-                                            cx.listener(move |this, _, _, cx| {
+                                    .cursor_pointer()
+                                    .hover(|d| d.bg(th.surface_2))
+                                    .when(selected == Some(id), |d| d.bg(th.surface_3))
+                                    .on_click(cx.listener(
+                                        move |this, ev: &gpui::ClickEvent, _, cx| {
+                                            if is_dir && ev.click_count() >= 2 {
                                                 this.open_node(id, cx);
-                                            }),
-                                        )
-                                    })
+                                            } else {
+                                                this.select_node(id, cx);
+                                            }
+                                        },
+                                    ))
                                     .child(div().flex_1().child(format!(
                                         "{}{}",
                                         if is_dir { "\u{25B8} " } else { "" },

@@ -1173,6 +1173,17 @@ dependencies = [
 ]
 
 [[package]]
+name = "ferriscan-actions"
+version = "0.1.0"
+dependencies = [
+ "ferriscan-core",
+ "ferriscan-platform",
+ "serde",
+ "thiserror",
+ "tracing",
+]
+
+[[package]]
 name = "ferriscan-core"
 version = "0.1.0"
 dependencies = [
@@ -1188,6 +1199,7 @@ dependencies = [
 name = "ferriscan-gpui"
 version = "0.1.0"
 dependencies = [
+ "ferriscan-actions",
  "ferriscan-core",
  "ferriscan-i18n",
  "ferriscan-persist",
