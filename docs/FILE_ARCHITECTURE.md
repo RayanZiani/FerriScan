@@ -86,7 +86,7 @@ members = ["crates/*", "apps/desktop/src-tauri", "xtask"]
 
 [workspace.package]
 edition = "2024"
-rust-version = "1.90"
+rust-version = "1.98"
 license = "MIT"
 repository = "https://github.com/<org>/ferriscan"
 
@@ -269,6 +269,25 @@ crates/ferriscan-persist/src/
 ---
 
 ## 7. `apps/desktop/src-tauri` — Tauri shell
+
+> **Migration (ADR-0005, Proposed):** the UI moves to GPUI. Target layout, built in
+> `apps/desktop-gpui` during spike M-G0 and renamed to `apps/desktop` at cutover (M-G4):
+>
+> ```
+> apps/desktop-gpui/src/
+> ├── main.rs            # window, GPUI app bootstrap
+> ├── state.rs           # AppState entity, Arc<Snapshot> slot, ScanController
+> ├── theme.rs           # Theme tokens, OS appearance, high-contrast mapping
+> ├── i18n.rs            # thin adapter over ferriscan-i18n
+> ├── views/             # shell, volume_list, tree_table, treemap, sunburst, overview, settings
+> ├── widgets/           # button, modal, menu, virtual table, toasts
+> ├── charts/            # treemap/sunburst painters + hit testing
+> └── actions.rs         # plan dialogs calling ferriscan-actions
+> ```
+>
+> Rules carry over: node IDs only, no `unwrap` in library code, every string via i18n,
+> virtualized lists above 200 rows. No IPC, DTO contract or npm. Until cutover, §7 and §8
+> below remain authoritative for the shipped app.
 
 ```
 apps/desktop/src-tauri/

@@ -19,7 +19,7 @@ Read in this order before touching code:
 | Product | FerriScan — fast, private, open-source disk space analyzer |
 | License | MIT |
 | Platforms | Windows 10 1809+ (primary), Linux, macOS 11+ |
-| Stack | Rust 2024 (pinned 1.90), Tauri 2.12, Svelte 5 + Vite 8 + TypeScript |
+| Stack | Rust 2024 (pinned 1.98.1), Tauri 2.12, Svelte 5 + Vite 8 + TypeScript. **Migrating to GPUI (100 % Rust) per `docs/adr/0005-gpui-native-ui.md`**: Tauri/Svelte rules below stay in force until the spike M-G0 is accepted and the ADR status is Accepted; GPUI code lives in `apps/desktop-gpui` meanwhile. |
 | Engine | `crates/ferriscan-core` (pure), `ferriscan-platform` (OS), `ferriscan-actions` (mutations) |
 | UI | `apps/desktop/src` (Svelte), shell in `apps/desktop/src-tauri` |
 | Privacy | No account, no telemetry, no network in v1.0 |
