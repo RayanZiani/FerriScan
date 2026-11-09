@@ -2,6 +2,7 @@
 //! `FerriScan` native shell (ADR-0005, `GPUI`).
 
 mod format;
+mod launch;
 mod results;
 mod shell;
 mod theme;
@@ -35,7 +36,8 @@ fn main() {
             ..WindowOptions::default()
         };
         cx.open_window(options, |window, cx| {
-            let shell = cx.new(shell::Shell::new);
+            let launch = launch::Launch::parse(std::env::args().skip(1));
+            let shell = cx.new(|cx| shell::Shell::new(launch, cx));
             shell.update(cx, |_, cx| {
                 cx.observe_window_bounds(window, |this, window, _| {
                     this.remember_bounds(window.bounds());

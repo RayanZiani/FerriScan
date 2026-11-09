@@ -30,9 +30,10 @@ use crate::{format, results::Results, theme::Theme, treemap::TreemapState};
 
 /// One selectable value of a setting: label, whether it is current, how to apply it.
 /// Message catalogue for the language the user picked, or the system language.
-fn catalog_for(settings: &Settings) -> Catalog {
+fn catalog_for(settings: &Settings, session_lang: Option<&str>) -> Catalog {
     let system = ferriscan_platform::locale::system_locale();
-    let tag = ferriscan_i18n::resolve_with(settings.language.as_deref(), system.as_deref());
+    let chosen = session_lang.or(settings.language.as_deref());
+    let tag = ferriscan_i18n::resolve_with(chosen, system.as_deref());
     Catalog::for_locale(&tag)
 }
 
@@ -94,19 +95,21 @@ pub struct Shell {
     treemap: Rc<RefCell<TreemapState>>,
     tm_hover: Option<usize>,
     dirs: AppDirs,
+    launch: crate::launch::Launch,
     elevated: bool,
     progress: Arc<Progress>,
     cancel: Arc<CancelToken>,
 }
 
 impl Shell {
-    pub fn new(cx: &mut Context<Self>) -> Self {
+    pub fn new(mut launch: crate::launch::Launch, cx: &mut Context<Self>) -> Self {
         let dirs = app_dirs("FerriScan");
         let settings = Settings::load(&dirs.settings_file());
         let mut shell = Self {
             dirs,
-            catalog: catalog_for(&settings),
+            catalog: catalog_for(&settings, launch.lang.as_deref()),
             settings,
+            launch: launch.clone(),
             volumes: Vec::new(),
             loading: false,
             scan: ScanUi::Idle,
@@ -124,6 +127,9 @@ impl Shell {
             cancel: Arc::new(CancelToken::new()),
         };
         shell.refresh(cx);
+        if let Some(path) = launch.scan.take() {
+            shell.start_scan(path, cx);
+        }
         shell
     }
 
@@ -232,6 +238,9 @@ impl Shell {
                         if snapshot.status != SnapshotStatus::Cancelled {
                             this.results = Some(Results::new(Arc::clone(&snapshot)));
                             this.view = View::Results;
+                            if this.launch.treemap {
+                                this.mode = ResultsMode::Treemap;
+                            }
                             this.selected = None;
                             this.pending = None;
                         }
@@ -760,7 +769,7 @@ impl Shell {
     /// Applies `change`, persists the result and reports a failed save as a toast.
     fn update_settings(&mut self, change: impl FnOnce(&mut Settings), cx: &mut Context<Self>) {
         change(&mut self.settings);
-        self.catalog = catalog_for(&self.settings);
+        self.catalog = catalog_for(&self.settings, self.launch.lang.as_deref());
         if self.settings.save(&self.dirs.settings_file()).is_err() {
             let text = self.catalog.t("common.error").to_string();
             self.push_toast(text, true, cx);
@@ -978,7 +987,10 @@ fn kind_key(kind: VolumeKind) -> &'static str {
 
 impl Render for Shell {
     fn render(&mut self, window: &mut Window, cx: &mut Context<Self>) -> impl IntoElement {
-        let th = Theme::resolve(self.settings.theme, window.appearance());
+        let th = Theme::resolve(
+            self.launch.theme.unwrap_or(self.settings.theme),
+            window.appearance(),
+        );
         let units = self.settings.units;
         let row_h = if self.settings.compact_density {
             px(24.)
