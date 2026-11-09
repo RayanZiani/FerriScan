@@ -1,7 +1,7 @@
-//! IPC data-transfer objects.
+//! Data-transfer objects shared with the CLI and persistence.
 //!
-//! Every structure that crosses the Tauri boundary is defined here once and
-//! mirrored into TypeScript by `xtask contract`. Field names are `camelCase` on
+//! Every structure serialized outside the process is defined here once.
+//! Field names are `camelCase` on
 //! the wire, sizes are integers, and optional values are explicit `null`.
 
 use serde::{Deserialize, Serialize};
@@ -424,7 +424,7 @@ impl TreemapDto {
     }
 }
 
-/// Structured error returned to the frontend.
+/// Structured error returned to callers.
 #[derive(Clone, Debug, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct AppErrorDto {

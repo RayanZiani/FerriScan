@@ -101,8 +101,8 @@ pub enum ScanError {
 
 /// Runs one scan to completion on the calling thread, which blocks.
 ///
-/// The caller is expected to run this on a background thread (the Tauri command
-/// uses `spawn_blocking`). Progress is published through [`Progress`] and
+/// The caller is expected to run this on a background thread (the app uses a GPUI
+/// background executor). Progress is published through [`Progress`] and
 /// cancellation through [`CancelToken`], both lock-free reads for the UI.
 pub fn scan(
     reader: &dyn DirReader,
