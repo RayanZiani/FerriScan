@@ -37,6 +37,21 @@ sequentially, which needs a read handle on the volume and therefore administrato
 - Extra risk: parsing untrusted on-disk structures. The parser bounds-checks every offset and
   skips malformed records instead of failing the scan.
 
+## Measured results (2026-11-09, `C:\`, 2.8M directory entries, NVMe SSD, release build)
+
+| Mode | Time |
+| --- | --- |
+| Directory walk, unelevated | 15-20 s warm, about 40 s cold |
+| MFT: read and index (8 threads, 4 MiB chunks) | 3.4-4.5 s (about 10 s on a cold first run) |
+| MFT: engine scan over the index | 2.5-2.9 s (about 1M entries/s) |
+
+Reading is limited by the disk (about 0.9 GB/s here); thread count and unbuffered I/O made no
+difference. Per-subtree totals match the directory walk for `Documents`, `AppData` and
+`Roaming` (counts within live-change noise). `System32` differs by 0.3 GiB because the walk hits
+4 access errors that the MFT does not. Hard links are listed under every parent like the walk
+does, and names kept in extension records are attached to their base file; both were bugs found
+by this comparison.
+
 ## Alternatives considered
 
 | Option | Why not |

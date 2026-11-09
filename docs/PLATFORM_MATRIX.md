@@ -26,6 +26,7 @@ Fill the "Verified" column with the build SHA during M9 and remove `T` markers.
 | Enumerate volumes | `GetLogicalDriveStringsW` | `/proc/self/mountinfo` | `getmntinfo` | |
 | Free space | `GetDiskFreeSpaceExW` | `statvfs` | `statfs` | |
 | Fast directory read | `GetFileInformationByHandleEx` + `FILE_FULL_DIR_INFO` (64 KiB batches, implemented) | `getdents64` + `statx` | `getattrlistbulk` | |
+| Whole-volume fast scan | NTFS MFT read, elevated, opt-in (implemented, ADR-0006) | not planned | not planned | Falls back to the directory walk on any failure |
 | Logical size | `WIN32_FIND_DATAW.nFileSize` | `statx.stx_size` | `ATTR_FILE_DATALENGTH` | |
 | Allocated size | `FILE_FULL_DIR_INFO.AllocationSize` (exact, implemented) | `statx.stx_blocks * 512` | `ATTR_FILE_ALLOCSIZE` |  |
 | Move to trash | `SHFileOperationW` (`FOF_ALLOWUNDO`, implemented) | not implemented | not implemented | Returns Unsupported off Windows |
