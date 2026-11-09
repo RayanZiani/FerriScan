@@ -1187,6 +1187,7 @@ dependencies = [
 name = "ferriscan-app"
 version = "0.2.0"
 dependencies = [
+ "embed-resource",
  "ferriscan-actions",
  "ferriscan-core",
  "ferriscan-i18n",

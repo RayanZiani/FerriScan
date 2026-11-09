@@ -18,5 +18,9 @@ ferriscan-actions = { path = "../../crates/ferriscan-actions" }
 gpui = { git = "https://github.com/zed-industries/zed", rev = "ddb90e5e89d346f21847281727e1644b8bb2cc37" }
 gpui_platform = { git = "https://github.com/zed-industries/zed", rev = "ddb90e5e89d346f21847281727e1644b8bb2cc37" }
 
+[target.'cfg(windows)'.build-dependencies]
+# Build-time only: embeds the executable icon through the Windows resource compiler (MIT).
+embed-resource = "3"
+
 [lints]
 workspace = true
