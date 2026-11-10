@@ -1,63 +1,56 @@
 name: release
 
+# Windows only for now. Linux and macOS builds are deferred until their GPUI setup is verified.
+
 on:
   push:
     tags: ["v*"]
   workflow_dispatch:
     inputs:
       tag:
-        description: Existing tag to build (e.g. v1.0.0)
+        description: Existing tag to build (e.g. v0.3.0)
         required: true
 
 permissions:
   contents: write
 
 jobs:
-  build:
-    name: build ${{ matrix.target }}
-    strategy:
-      fail-fast: false
-      matrix:
-        include:
-          - os: windows-2022
-            target: x86_64-pc-windows-msvc
-          - os: ubuntu-24.04
-            target: x86_64-unknown-linux-gnu
-          - os: macos-14
-            target: aarch64-apple-darwin
-    runs-on: ${{ matrix.os }}
+  windows:
+    name: build and package (windows)
+    runs-on: windows-2022
     steps:
       - uses: actions/checkout@v4
         with:
           ref: ${{ inputs.tag || github.ref }}
       - uses: dtolnay/rust-toolchain@stable
-        with:
-          targets: ${{ matrix.target }}
-      - name: Linux deps
-        if: runner.os == 'Linux'
+      - uses: Swatinem/rust-cache@v2
+      - run: cargo build --release -p ferriscan-app -p ferriscan-cli
+      - name: Install installer toolchains
+        shell: pwsh
         run: |
-          sudo apt-get update
-          sudo apt-get install -y libxkbcommon-dev libxkbcommon-x11-dev libwayland-dev \
-            libxcb1-dev libx11-xcb-dev libfontconfig-dev libvulkan-dev
-      # Plain release binary for now. Installers and code signing return with M10 (release
-      # engineering); the Tauri bundler and its signing secrets are gone.
-      - run: cargo build --release -p ferriscan-app -p ferriscan-cli --target ${{ matrix.target }}
-      - name: Package and checksum
-        shell: bash
+          choco install innosetup -y --no-progress
+          dotnet tool install --global wix --version 5.0.2
+          wix extension add --global WixToolset.UI.wixext/5.0.2
+      - name: Build installers and checksums
+        shell: pwsh
         run: |
-          mkdir -p dist
-          find target/${{ matrix.target }}/release -maxdepth 1 -type f \
-            \( -name 'ferriscan-app*' -o -name 'ferriscan' -o -name 'ferriscan.exe' \) \
-            ! -name '*.d' ! -name '*.pdb' -exec cp {} dist/ \;
-          cd dist && sha256sum * > SHA256SUMS.txt
+          $env:PATH += ";$env:USERPROFILE\.dotnet\tools"
+          ./scripts/build-installers.ps1 -Exe target/release/ferriscan-app.exe
+          Copy-Item target/release/ferriscan.exe dist/ferriscan-cli.exe
+          # Checksums again so the CLI is covered too.
+          Push-Location dist
+          Get-ChildItem -File | Where-Object Name -ne 'SHA256SUMS.txt' | ForEach-Object {
+            "{0}  {1}" -f (Get-FileHash $_.FullName -Algorithm SHA256).Hash.ToLower(), $_.Name
+          } | Set-Content SHA256SUMS.txt -Encoding ascii
+          Pop-Location
       - uses: actions/upload-artifact@v4
         with:
-          name: ferriscan-${{ matrix.target }}
+          name: ferriscan-windows
           path: dist/*
 
   publish:
     name: publish GitHub release
-    needs: build
+    needs: windows
     runs-on: ubuntu-24.04
     steps:
       - uses: actions/checkout@v4
@@ -66,7 +59,7 @@ jobs:
           path: artifacts
       - name: Extract release notes from CHANGELOG
         run: |
-          awk '/^## \[/{c++} c==1' CHANGELOG.md > RELEASE_NOTES.md || true
+          awk '/^## \[/{c++} c==2' CHANGELOG.md > RELEASE_NOTES.md || true
       - uses: softprops/action-gh-release@v2
         with:
           tag_name: ${{ inputs.tag || github.ref_name }}

@@ -1,0 +1,50 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- FerriScan MSI (WiX). Built by scripts/build-installers.ps1:
+       wix build ferriscan.wxs -arch x64 -ext WixToolset.UI.wixext -d Version=x.y.z -d AppExe=... -->
+<Wix xmlns="http://wixtoolset.org/schemas/v4/wxs" xmlns:ui="http://wixtoolset.org/schemas/v4/wxs/ui">
+  <Package Name="FerriScan"
+           Manufacturer="FerriScan contributors"
+           Version="$(Version)"
+           UpgradeCode="3C9E2B64-8F1A-4D7B-A5E0-1B6D94C27F58"
+           Scope="perMachine"
+           Language="1033">
+
+    <MajorUpgrade DowngradeErrorMessage="A newer version of FerriScan is already installed." />
+    <MediaTemplate EmbedCab="yes" CompressionLevel="high" />
+
+    <Icon Id="AppIcon.ico" SourceFile="..\apps\desktop\assets\icon.ico" />
+    <Property Id="ARPPRODUCTICON" Value="AppIcon.ico" />
+    <Property Id="ARPURLINFOABOUT" Value="https://github.com/RayanZiani/FerriScan" />
+    <Property Id="ARPHELPLINK" Value="https://github.com/RayanZiani/FerriScan/issues" />
+
+    <WixVariable Id="WixUILicenseRtf" Value="assets\license.rtf" />
+    <WixVariable Id="WixUIBannerBmp" Value="assets\banner.bmp" />
+    <WixVariable Id="WixUIDialogBmp" Value="assets\dialog.bmp" />
+
+    <ui:WixUI Id="WixUI_InstallDir" InstallDirectory="INSTALLFOLDER" />
+
+    <StandardDirectory Id="ProgramFiles64Folder">
+      <Directory Id="INSTALLFOLDER" Name="FerriScan" />
+    </StandardDirectory>
+    <StandardDirectory Id="ProgramMenuFolder" />
+
+    <ComponentGroup Id="AppFiles" Directory="INSTALLFOLDER">
+      <Component Id="MainExecutable" Guid="*">
+        <File Id="FerriScanApp" Source="$(AppExe)" KeyPath="yes">
+          <Shortcut Id="StartMenuShortcut" Directory="ProgramMenuFolder" Name="FerriScan"
+                    WorkingDirectory="INSTALLFOLDER" Icon="AppIcon.ico" Advertise="no" />
+        </File>
+      </Component>
+      <Component Id="LicenseComponent" Guid="*">
+        <File Id="LicenseFile" Source="..\LICENSE" KeyPath="yes" />
+      </Component>
+      <Component Id="ReadmeComponent" Guid="*">
+        <File Id="ReadmeFile" Source="..\README.md" KeyPath="yes" />
+      </Component>
+    </ComponentGroup>
+
+    <Feature Id="Main" Title="FerriScan" Level="1">
+      <ComponentGroupRef Id="AppFiles" />
+    </Feature>
+  </Package>
+</Wix>
