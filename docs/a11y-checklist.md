@@ -2,9 +2,24 @@
 
 Run once per release on each platform. Record the build SHA and the tester.
 
+## Status (2026-11-10, v0.3.0, Windows, GPUI + AccessKit)
+
+Checked with Windows UI Automation against the release build:
+
+- Tabs, buttons, the size table and its rows are exposed with role and name (for example
+  `DataItem "Games, 3.1 GiB"`); everything clickable is keyboard focusable.
+- Tab / Shift+Tab walk the tabs, Refresh, Up, view buttons and the table; inside the table
+  Up/Down move the selection (announced as the focused row), Enter opens a folder, Backspace goes
+  up, Delete asks to move to the Recycle Bin, Escape dismisses the confirmation.
+- Contrast: the high-contrast theme is asserted at 7:1 by a unit test; light and dark are not yet.
+
+Not done: a real screen-reader pass (Narrator or NVDA), the treemap is pointer-only (its
+accessible description points to the table view), no live-region announcements of scan progress,
+no reduced-motion handling, 200 % zoom untested.
+
 ## Automated
 
-- [ ] Playwright + axe-core on every route: zero `serious` or `critical` violations.
+- [ ] Automated accessibility-tree check (UI Automation script) on every view: zero unnamed controls.
 - [ ] Token contrast assertion: text on background ≥ 4.5:1, large text ≥ 3:1, focus ring ≥ 3:1
       against adjacent colors, in light, dark and high contrast.
 - [ ] Every `<button>`/`<a>`/input has an accessible name (`aria-label` or visible text).

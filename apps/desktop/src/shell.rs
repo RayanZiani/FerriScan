@@ -1225,7 +1225,11 @@ impl Render for Shell {
             .bg(th.bg)
             .text_color(th.text)
             .track_focus(&self.root_focus)
-            .on_key_down(cx.listener(|_, ev: &gpui::KeyDownEvent, window, cx| {
+            .on_key_down(cx.listener(|this, ev: &gpui::KeyDownEvent, window, cx| {
+                // Escape dismisses the pending confirmation without acting.
+                if ev.keystroke.key == "escape" && this.pending.take().is_some() {
+                    cx.notify();
+                }
                 // GPUI leaves Tab navigation to the app.
                 if ev.keystroke.key == "tab" {
                     if ev.keystroke.modifiers.shift {

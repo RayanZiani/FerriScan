@@ -7,8 +7,14 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
 
+## [0.3.0] — 2026-11-10
+
 ### Added
 
+- Windows installers: a per-user Inno Setup `.exe` (English, French, Chinese) and a per-machine WiX `.msi`, both with custom artwork; the release workflow is Windows only and publishes them with the portable exe and checksums.
+- French and Simplified Chinese translations, a language setting, and a Windows system-locale reader.
+- Accessibility: roles and names on every control, Tab order with a visible focus state, keyboard navigation of the size table (arrows, Enter, Backspace, Delete, Escape), checked through Windows UI Automation.
+- README screenshots and `scripts/screenshot.ps1` (captures the window itself); app launch switches `PATH --treemap --settings --theme --lang` for screenshots and smoke tests.
 - Product specification, file architecture, roadmap, privacy inventory and platform matrix.
 - Architecture decision records 0001–0004 (Tauri/Svelte, node store, action tokens, no telemetry).
 - Engineering agent setup and project conventions.
@@ -26,6 +32,10 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 - Rust toolchain pinned to 1.98.1 (required by GPUI).
 
 ### Fixed
+
+- Treemap: the squarified layout put rows on the wrong axis, so most tiles were missing. It now tiles the whole area, with a test for coverage, proportions and overlaps.
+- Size table: rows fill the list width so size, bar and item columns line up with their headers.
+- Duplicate `settings.threads` message key removed; `i18n-check` now reports duplicate and extra keys.
 
 ### Security
 
