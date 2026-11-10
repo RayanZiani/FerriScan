@@ -51,6 +51,7 @@ scan.summary.errors = Errors
 
 view.table = Table
 view.treemap = Treemap
+view.treemap_hint = Visual map of folder sizes. Use the Table view to browse with the keyboard.
 view.sunburst = Sunburst
 view.extensions = Extensions
 view.largest = Largest files

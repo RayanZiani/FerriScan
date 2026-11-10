@@ -20,15 +20,14 @@ use ferriscan_i18n::Catalog;
 use ferriscan_persist::{AppDirs, Settings, ThemeMode, Units, app_dirs};
 use ferriscan_platform::volumes::{Volume, VolumeKind};
 use gpui::{
-    Bounds, ClipboardItem, Context, InteractiveElement, IntoElement, ParentElement, Render,
-    StatefulInteractiveElement, Styled, Window, div, px, relative, uniform_list,
+    Bounds, ClipboardItem, Context, InteractiveElement, IntoElement, ParentElement, Render, Role,
+    StatefulInteractiveElement, Styled, Toggled, Window, div, px, relative, uniform_list,
 };
 
 use gpui::prelude::FluentBuilder as _;
 
-use crate::{format, results::Results, theme::Theme, treemap::TreemapState};
+use crate::{a11y::Pressable as _, format, results::Results, theme::Theme, treemap::TreemapState};
 
-/// One selectable value of a setting: label, whether it is current, how to apply it.
 /// Message catalogue for the language the user picked, or the system language.
 fn catalog_for(settings: &Settings, session_lang: Option<&str>) -> Catalog {
     let system = ferriscan_platform::locale::system_locale();
@@ -37,6 +36,7 @@ fn catalog_for(settings: &Settings, session_lang: Option<&str>) -> Catalog {
     Catalog::for_locale(&tag)
 }
 
+/// One selectable value of a setting: label, whether it is current, how to apply it.
 type SettingChoice = (String, bool, fn(&mut Settings));
 
 /// A validated destructive action waiting for the user's confirmation.
@@ -97,6 +97,12 @@ pub struct Shell {
     dirs: AppDirs,
     launch: crate::launch::Launch,
     elevated: bool,
+    /// Keyboard focus target of the size table (one tab stop, arrow keys move the selection).
+    list_focus: gpui::FocusHandle,
+    /// Keeps keyboard focus inside the window so Tab works before the first click.
+    root_focus: gpui::FocusHandle,
+    focus_ready: bool,
+    list_scroll: gpui::UniformListScrollHandle,
     progress: Arc<Progress>,
     cancel: Arc<CancelToken>,
 }
@@ -123,6 +129,10 @@ impl Shell {
             treemap: Rc::default(),
             tm_hover: None,
             elevated: ferriscan_platform::elevation::is_elevated(),
+            list_focus: cx.focus_handle().tab_stop(true),
+            root_focus: cx.focus_handle(),
+            focus_ready: false,
+            list_scroll: gpui::UniformListScrollHandle::new(),
             progress: Arc::new(Progress::new()),
             cancel: Arc::new(CancelToken::new()),
         };
@@ -415,6 +425,7 @@ impl Shell {
                 .py(px(2.))
                 .rounded(px(4.))
                 .cursor_pointer()
+                .pressable(Role::Button, label.clone(), th)
                 .bg(if danger { th.danger } else { th.surface_3 })
                 .text_color(if danger { th.text_inverse } else { th.text })
                 .child(label)
@@ -469,6 +480,33 @@ impl Shell {
         )
     }
 
+    /// Keyboard handling for the size table: arrows move the selection, Enter opens a folder,
+    /// Backspace goes up and Delete asks to move the selection to the recycle bin.
+    fn list_key(&mut self, key: &str, cx: &mut Context<Self>) {
+        let Some(r) = &self.results else { return };
+        match key {
+            "down" | "up" => {
+                let Some(next) = r.step(self.selected, key == "down") else {
+                    return;
+                };
+                let id = r.rows[next];
+                self.list_scroll
+                    .scroll_to_item(next, gpui::ScrollStrategy::Nearest);
+                self.select_node(id, cx);
+            }
+            "enter" => {
+                if let Some(id) = self.selected
+                    && r.snapshot.store.get(id).flags().is_dir()
+                {
+                    self.open_node(id, cx);
+                }
+            }
+            "backspace" => self.go_up(cx),
+            "delete" => self.request_trash(cx),
+            _ => {}
+        }
+    }
+
     fn open_node(&mut self, id: NodeId, cx: &mut Context<Self>) {
         if let Some(r) = &mut self.results {
             r.open(id);
@@ -520,6 +558,9 @@ impl Shell {
             .child(
                 div()
                     .id("treemap")
+                    .role(Role::Image)
+                    .aria_label(self.catalog.t("view.treemap").to_string())
+                    .aria_description(self.catalog.t("view.treemap_hint").to_string())
                     .flex_1()
                     .on_mouse_move(cx.listener(move |this, ev: &gpui::MouseMoveEvent, _, cx| {
                         let h = hit(&move_state, ev.position);
@@ -625,6 +666,12 @@ impl Shell {
                 .py(px(2.))
                 .rounded(px(4.))
                 .cursor_pointer()
+                .pressable(Role::Button, label.clone(), th)
+                .aria_toggled(if self.mode == target {
+                    Toggled::True
+                } else {
+                    Toggled::False
+                })
                 .bg(if self.mode == target {
                     th.accent
                 } else {
@@ -653,6 +700,7 @@ impl Shell {
                     .py(px(2.))
                     .rounded(px(4.))
                     .bg(th.surface_3)
+                    .pressable(Role::Button, t("table.up"), th)
                     .when(!at_root, |d| {
                         d.cursor_pointer()
                             .on_click(cx.listener(|this, _, _, cx| this.go_up(cx)))
@@ -660,7 +708,13 @@ impl Shell {
                     .when(at_root, |d| d.opacity(0.4))
                     .child(t("table.up")),
             )
-            .child(path)
+            .child(
+                div()
+                    .id("path")
+                    .role(Role::Label)
+                    .aria_label(path.clone())
+                    .child(path),
+            )
             .child(div().flex_1())
             .child(mode_button(
                 "mode-table",
@@ -699,82 +753,115 @@ impl Shell {
                 d.child(div().text_color(th.text_muted).child(t("table.empty")))
             })
             .child(
-                uniform_list(
-                    "rows",
-                    count,
-                    cx.processor(move |this, range: std::ops::Range<usize>, _, cx| {
-                        let Some(r) = &this.results else {
-                            return Vec::new();
-                        };
-                        let store = &r.snapshot.store;
-                        let selected = this.selected;
-                        let total = store.get(r.current).size.max(1);
-                        range
-                            .filter_map(|i| r.rows.get(i).copied())
-                            .map(|id| {
-                                let rec = store.get(id);
-                                let is_dir = rec.flags().is_dir();
-                                let frac = rec.size as f32 / total as f32;
-                                div()
-                                    .id(("row", id.raw() as usize))
-                                    .flex()
-                                    .items_center()
-                                    .w_full()
-                                    .h(row_h)
-                                    .px(px(8.))
-                                    .rounded(px(4.))
-                                    .cursor_pointer()
-                                    .hover(|d| d.bg(th.surface_2))
-                                    .when(selected == Some(id), |d| d.bg(th.surface_3))
-                                    .on_click(cx.listener(
-                                        move |this, ev: &gpui::ClickEvent, _, cx| {
-                                            if is_dir && ev.click_count() >= 2 {
-                                                this.open_node(id, cx);
-                                            } else {
-                                                this.select_node(id, cx);
-                                            }
-                                        },
-                                    ))
-                                    .child(
+                div()
+                    .id("rows-focus")
+                    .role(Role::Table)
+                    .aria_label(t("nav.results"))
+                    .track_focus(&self.list_focus)
+                    .tab_index(0)
+                    .focus_visible(move |style| style.border_1().border_color(th.accent))
+                    .on_key_down(cx.listener(|this, ev: &gpui::KeyDownEvent, _, cx| {
+                        this.list_key(ev.keystroke.key.as_str(), cx);
+                    }))
+                    .flex_1()
+                    .min_h_0()
+                    .flex()
+                    .flex_col()
+                    .child(
+                        uniform_list(
+                            "rows",
+                            count,
+                            cx.processor(move |this, range: std::ops::Range<usize>, _, cx| {
+                                let Some(r) = &this.results else {
+                                    return Vec::new();
+                                };
+                                let store = &r.snapshot.store;
+                                let selected = this.selected;
+                                let total = store.get(r.current).size.max(1);
+                                range
+                                    .filter_map(|i| r.rows.get(i).copied())
+                                    .map(|id| {
+                                        let rec = store.get(id);
+                                        let is_dir = rec.flags().is_dir();
+                                        let frac = rec.size as f32 / total as f32;
                                         div()
-                                            .flex_1()
-                                            .min_w_0()
-                                            .overflow_hidden()
-                                            .whitespace_nowrap()
-                                            .text_ellipsis()
-                                            .child(format!(
-                                                "{}{}",
-                                                if is_dir { "\u{25B8} " } else { "" },
-                                                store.name(id)
-                                            )),
-                                    )
-                                    .child(div().w(px(100.)).child(format::bytes(rec.size, units)))
-                                    .child(
-                                        div().w(px(160.)).pr(px(12.)).child(
-                                            div()
-                                                .h(px(6.))
-                                                .w_full()
-                                                .rounded(px(3.))
-                                                .bg(th.surface_3)
-                                                .child(
+                                            .id(("row", id.raw() as usize))
+                                            .flex()
+                                            .items_center()
+                                            .w_full()
+                                            .h(row_h)
+                                            .px(px(8.))
+                                            .rounded(px(4.))
+                                            .cursor_pointer()
+                                            .role(Role::Row)
+                                            .aria_label(format!(
+                                                "{}, {}",
+                                                store.name(id),
+                                                format::bytes(rec.size, units)
+                                            ))
+                                            .aria_selected(selected == Some(id))
+                                            .when(
+                                                selected == Some(id),
+                                                StatefulInteractiveElement::aria_active_descendant,
+                                            )
+                                            .hover(|d| d.bg(th.surface_2))
+                                            .when(selected == Some(id), |d| d.bg(th.surface_3))
+                                            .on_click(cx.listener(
+                                                move |this, ev: &gpui::ClickEvent, window, cx| {
+                                                    this.list_focus.focus(window, cx);
+                                                    if is_dir && ev.click_count() >= 2 {
+                                                        this.open_node(id, cx);
+                                                    } else {
+                                                        this.select_node(id, cx);
+                                                    }
+                                                },
+                                            ))
+                                            .child(
+                                                div()
+                                                    .flex_1()
+                                                    .min_w_0()
+                                                    .overflow_hidden()
+                                                    .whitespace_nowrap()
+                                                    .text_ellipsis()
+                                                    .child(format!(
+                                                        "{}{}",
+                                                        if is_dir { "\u{25B8} " } else { "" },
+                                                        store.name(id)
+                                                    )),
+                                            )
+                                            .child(
+                                                div()
+                                                    .w(px(100.))
+                                                    .child(format::bytes(rec.size, units)),
+                                            )
+                                            .child(
+                                                div().w(px(160.)).pr(px(12.)).child(
                                                     div()
-                                                        .h_full()
-                                                        .w(relative(frac.clamp(0.0, 1.0)))
+                                                        .h(px(6.))
+                                                        .w_full()
                                                         .rounded(px(3.))
-                                                        .bg(th.accent),
+                                                        .bg(th.surface_3)
+                                                        .child(
+                                                            div()
+                                                                .h_full()
+                                                                .w(relative(frac.clamp(0.0, 1.0)))
+                                                                .rounded(px(3.))
+                                                                .bg(th.accent),
+                                                        ),
                                                 ),
-                                        ),
-                                    )
-                                    .child(div().w(px(80.)).child(if is_dir {
-                                        rec.child_count.to_string()
-                                    } else {
-                                        String::new()
-                                    }))
-                            })
-                            .collect()
-                    }),
-                )
-                .flex_1(),
+                                            )
+                                            .child(div().w(px(80.)).child(if is_dir {
+                                                rec.child_count.to_string()
+                                            } else {
+                                                String::new()
+                                            }))
+                                    })
+                                    .collect()
+                            }),
+                        )
+                        .track_scroll(&self.list_scroll)
+                        .flex_1(),
+                    ),
             )
     }
 
@@ -810,6 +897,12 @@ impl Shell {
                                 .py(px(4.))
                                 .rounded(px(4.))
                                 .cursor_pointer()
+                                .pressable(Role::RadioButton, text.clone(), th)
+                                .aria_toggled(if active {
+                                    Toggled::True
+                                } else {
+                                    Toggled::False
+                                })
                                 .bg(if active { th.accent } else { th.surface_3 })
                                 .text_color(if active { th.text_inverse } else { th.text })
                                 .on_click(cx.listener(move |this, _, _, cx| {
@@ -999,6 +1092,10 @@ fn kind_key(kind: VolumeKind) -> &'static str {
 
 impl Render for Shell {
     fn render(&mut self, window: &mut Window, cx: &mut Context<Self>) -> impl IntoElement {
+        if !self.focus_ready {
+            self.focus_ready = true;
+            self.root_focus.focus(window, cx);
+        }
         let th = Theme::resolve(
             self.launch.theme.unwrap_or(self.settings.theme),
             window.appearance(),
@@ -1062,6 +1159,15 @@ impl Render for Shell {
                                             .bg(th.accent)
                                             .text_color(th.text_inverse)
                                             .cursor_pointer()
+                                            .pressable(
+                                                Role::Button,
+                                                format!(
+                                                    "{} {}",
+                                                    t("volumes.scan"),
+                                                    v.mount_point.display()
+                                                ),
+                                                th,
+                                            )
                                             .on_click(cx.listener(move |this, _, _, cx| {
                                                 this.start_scan(root.clone(), cx);
                                             }))
@@ -1104,6 +1210,8 @@ impl Render for Shell {
                     .border_1()
                     .border_color(if toast.error { th.danger } else { th.border })
                     .cursor_pointer()
+                    .role(Role::Alert)
+                    .aria_label(toast.text.clone())
                     .on_click(cx.listener(move |this, _, _, cx| this.dismiss_toast(id, cx)))
                     .child(toast.text.clone())
             })
@@ -1116,6 +1224,17 @@ impl Render for Shell {
             .flex_col()
             .bg(th.bg)
             .text_color(th.text)
+            .track_focus(&self.root_focus)
+            .on_key_down(cx.listener(|_, ev: &gpui::KeyDownEvent, window, cx| {
+                // GPUI leaves Tab navigation to the app.
+                if ev.keystroke.key == "tab" {
+                    if ev.keystroke.modifiers.shift {
+                        window.focus_prev(cx);
+                    } else {
+                        window.focus_next(cx);
+                    }
+                }
+            }))
             .child(
                 div()
                     .flex()
@@ -1135,6 +1254,8 @@ impl Render for Shell {
                                 .py(px(2.))
                                 .rounded(px(4.))
                                 .cursor_pointer()
+                                .pressable(Role::Tab, label.clone(), th)
+                                .aria_selected(view == target)
                                 .when(view == target, |d| d.bg(th.surface_3))
                                 .on_click(cx.listener(move |this, _, _, cx| {
                                     this.view = target;
@@ -1160,6 +1281,7 @@ impl Render for Shell {
                             .bg(th.accent)
                             .text_color(th.text_inverse)
                             .cursor_pointer()
+                            .pressable(Role::Button, t("volumes.refresh"), th)
                             .on_click(cx.listener(|this, _, _, cx| this.refresh(cx)))
                             .child(t("volumes.refresh")),
                     ),
@@ -1200,6 +1322,7 @@ impl Render for Shell {
                                         .bg(th.accent)
                                         .text_color(th.text_inverse)
                                         .cursor_pointer()
+                                        .pressable(Role::Button, t("volumes.relaunch"), th)
                                         .on_click(cx.listener(|this, _, _, cx| {
                                             this.relaunch_elevated(cx);
                                         }))
@@ -1218,6 +1341,9 @@ impl Render for Shell {
             })
             .child(
                 div()
+                    .id("statusbar")
+                    .role(Role::Status)
+                    .aria_label(status.clone())
                     .px(px(16.))
                     .py(px(4.))
                     .bg(th.surface_2)
@@ -1232,6 +1358,7 @@ impl Render for Shell {
                             div()
                                 .id("cancel")
                                 .cursor_pointer()
+                                .pressable(Role::Button, t("scan.cancel"), th)
                                 .text_color(th.danger)
                                 .on_click(cx.listener(|this, _, _, cx| {
                                     this.cancel.cancel();

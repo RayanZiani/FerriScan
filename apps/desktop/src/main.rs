@@ -1,6 +1,7 @@
 #![cfg_attr(not(debug_assertions), windows_subsystem = "windows")]
 //! `FerriScan` native shell (ADR-0005, `GPUI`).
 
+mod a11y;
 mod format;
 mod launch;
 mod results;

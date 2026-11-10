@@ -51,6 +51,7 @@ scan.summary.errors = 错误
 
 view.table = 表格
 view.treemap = 树状图
+view.treemap_hint = 文件夹大小的可视化地图。请使用表格视图通过键盘浏览。
 view.sunburst = 旭日图
 view.extensions = 扩展名
 view.largest = 最大的文件

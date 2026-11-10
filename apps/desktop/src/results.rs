@@ -39,6 +39,20 @@ impl Results {
         }
     }
 
+    /// Row index one step up or down from `from` (the first row when nothing is selected),
+    /// clamped to the ends of the list; `None` when the folder is empty.
+    #[must_use]
+    pub fn step(&self, from: Option<NodeId>, down: bool) -> Option<usize> {
+        let last = self.rows.len().checked_sub(1)?;
+        let at = from.and_then(|id| self.rows.iter().position(|row| *row == id));
+        Some(match (at, down) {
+            (None, _) => 0,
+            (Some(i), true) => (i + 1).min(last),
+            (Some(i), false) => i.saturating_sub(1),
+        })
+    }
+
+    /// Whether the view shows the scan root.
     #[must_use]
     pub fn at_root(&self) -> bool {
         self.current == self.snapshot.root
@@ -109,5 +123,17 @@ mod tests {
         assert!(r.at_root());
         r.up(); // no-op at root
         assert!(r.at_root());
+    }
+
+    #[test]
+    fn arrow_steps_start_at_the_top_and_stop_at_the_ends() {
+        let r = Results::new(snapshot());
+        let (first, second) = (r.rows[0], r.rows[1]);
+        assert_eq!(r.step(None, true), Some(0));
+        assert_eq!(r.step(None, false), Some(0));
+        assert_eq!(r.step(Some(first), true), Some(1));
+        assert_eq!(r.step(Some(second), true), Some(1));
+        assert_eq!(r.step(Some(second), false), Some(0));
+        assert_eq!(r.step(Some(first), false), Some(0));
     }
 }

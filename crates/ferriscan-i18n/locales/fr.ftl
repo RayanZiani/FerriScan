@@ -51,6 +51,7 @@ scan.summary.errors = Erreurs
 
 view.table = Tableau
 view.treemap = Treemap
+view.treemap_hint = Carte visuelle des tailles. Utilisez la vue Tableau pour naviguer au clavier.
 view.sunburst = Sunburst
 view.extensions = Extensions
 view.largest = Plus gros fichiers
