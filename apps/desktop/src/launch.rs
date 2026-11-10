@@ -6,7 +6,7 @@ use std::path::PathBuf;
 
 use ferriscan_persist::ThemeMode;
 
-/// `ferriscan-app [PATH] [--treemap] [--theme light|dark|contrast] [--lang TAG]`.
+/// `ferriscan-app [PATH] [--treemap] [--settings] [--theme light|dark|contrast] [--lang TAG]`.
 #[derive(Clone, Debug, Default, PartialEq, Eq)]
 pub struct Launch {
     /// Folder or drive to scan right after the window opens.
@@ -17,6 +17,8 @@ pub struct Launch {
     pub theme: Option<ThemeMode>,
     /// Language tag for this session only (`en`, `fr`, `zh-CN`).
     pub lang: Option<String>,
+    /// Open on the settings page instead of the volume list.
+    pub settings: bool,
 }
 
 impl Launch {
@@ -36,6 +38,7 @@ impl Launch {
                     });
                 }
                 "--lang" => launch.lang = args.next(),
+                "--settings" => launch.settings = true,
                 other if !other.starts_with('-') => launch.scan = Some(PathBuf::from(other)),
                 _ => {}
             }
@@ -67,6 +70,8 @@ mod tests {
         assert!(l.treemap);
         assert_eq!(l.theme, Some(ThemeMode::Dark));
         assert_eq!(l.lang.as_deref(), Some("fr"));
+        assert!(!l.settings);
+        assert!(parse(&["--settings"]).settings);
         assert_eq!(parse(&[]), Launch::default());
         assert_eq!(parse(&["--theme", "nope"]).theme, None);
     }

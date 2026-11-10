@@ -127,6 +127,9 @@ impl Shell {
             cancel: Arc::new(CancelToken::new()),
         };
         shell.refresh(cx);
+        if launch.settings {
+            shell.view = View::Settings;
+        }
         if let Some(path) = launch.scan.take() {
             shell.start_scan(path, cx);
         }
@@ -716,6 +719,7 @@ impl Shell {
                                     .id(("row", id.raw() as usize))
                                     .flex()
                                     .items_center()
+                                    .w_full()
                                     .h(row_h)
                                     .px(px(8.))
                                     .rounded(px(4.))
@@ -731,11 +735,19 @@ impl Shell {
                                             }
                                         },
                                     ))
-                                    .child(div().flex_1().child(format!(
-                                        "{}{}",
-                                        if is_dir { "\u{25B8} " } else { "" },
-                                        store.name(id)
-                                    )))
+                                    .child(
+                                        div()
+                                            .flex_1()
+                                            .min_w_0()
+                                            .overflow_hidden()
+                                            .whitespace_nowrap()
+                                            .text_ellipsis()
+                                            .child(format!(
+                                                "{}{}",
+                                                if is_dir { "\u{25B8} " } else { "" },
+                                                store.name(id)
+                                            )),
+                                    )
                                     .child(div().w(px(100.)).child(format::bytes(rec.size, units)))
                                     .child(
                                         div().w(px(160.)).pr(px(12.)).child(
