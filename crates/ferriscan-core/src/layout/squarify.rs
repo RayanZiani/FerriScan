@@ -104,27 +104,19 @@ fn place_row(row: &[(usize, f64)], free: Rect, row_sum: f64, out: &mut [Rect]) -
     if row.is_empty() || row_sum <= 0.0 {
         return free;
     }
-    let horizontal = free.w >= free.h;
-    let thickness = f64::from(if horizontal { free.h } else { free.w });
-    let extent = row_sum / thickness;
+    // The row lies along the short side of the free area; its thickness is the row's area
+    // divided by that side, and each item takes a share of the side proportional to its weight.
+    let tall_columns = free.w >= free.h;
+    let side = f64::from(if tall_columns { free.h } else { free.w });
+    let extent = row_sum / side;
     let mut cursor = 0.0f64;
 
     for (idx, weight) in row {
-        let span = weight / thickness;
-        let (x, y, w, h) = if horizontal {
-            (
-                f64::from(free.x) + cursor,
-                f64::from(free.y),
-                span,
-                thickness,
-            )
+        let span = weight / extent;
+        let (x, y, w, h) = if tall_columns {
+            (f64::from(free.x), f64::from(free.y) + cursor, extent, span)
         } else {
-            (
-                f64::from(free.x),
-                f64::from(free.y) + cursor,
-                thickness,
-                span,
-            )
+            (f64::from(free.x) + cursor, f64::from(free.y), span, extent)
         };
         // Clamp to the free area: floating-point accumulation can produce a
         // sub-pixel overflow that would leak outside the canvas.
@@ -144,19 +136,19 @@ fn place_row(row: &[(usize, f64)], free: Rect, row_sum: f64, out: &mut [Rect]) -
     }
 
     let extent32 = extent as f32;
-    if horizontal {
-        Rect {
-            x: free.x,
-            y: free.y + extent32,
-            w: free.w,
-            h: (free.h - extent32).max(0.0),
-        }
-    } else {
+    if tall_columns {
         Rect {
             x: free.x + extent32,
             y: free.y,
             w: (free.w - extent32).max(0.0),
             h: free.h,
+        }
+    } else {
+        Rect {
+            x: free.x,
+            y: free.y + extent32,
+            w: free.w,
+            h: (free.h - extent32).max(0.0),
         }
     }
 }
@@ -210,6 +202,35 @@ mod tests {
             assert!(r.x + r.w <= area.w + 0.01);
             assert!(r.y + r.h <= area.h + 0.01);
         }
+    }
+
+    #[test]
+    fn rectangles_tile_the_area_in_proportion_to_their_weights() {
+        let weights = [50.0, 30.0, 12.0, 5.0, 2.0, 1.0];
+        let area = Rect {
+            x: 10.0,
+            y: 20.0,
+            w: 300.0,
+            h: 200.0,
+        };
+        let rects = squarify(&weights, area);
+        let total: f64 = weights.iter().sum();
+        let mut covered = 0.0f64;
+        for (i, r) in rects.iter().enumerate() {
+            let expected = f64::from(area.area()) * weights[i] / total;
+            assert!(
+                (f64::from(r.area()) - expected).abs() < expected * 0.01 + 0.5,
+                "tile {i}: {} vs {expected}",
+                r.area()
+            );
+            covered += f64::from(r.area());
+            for other in &rects[..i] {
+                let overlap_w = (r.x + r.w).min(other.x + other.w) - r.x.max(other.x);
+                let overlap_h = (r.y + r.h).min(other.y + other.h) - r.y.max(other.y);
+                assert!(overlap_w <= 0.01 || overlap_h <= 0.01, "tiles {i} overlap");
+            }
+        }
+        assert!((covered - f64::from(area.area())).abs() < 5.0);
     }
 
     #[test]
